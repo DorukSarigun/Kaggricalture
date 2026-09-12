@@ -1,0 +1,226 @@
+{
+  "source": "https://www.kaggle.com/competitions/kaggriculture",
+  "engine_source": "kaggle_environments.envs.kaggriculture.kaggriculture",
+  "formula": "price(inv) = base + sign * amp * f(|inv - I0|); floored at price_floor and rounded to nearest dollar",
+  "globals": {
+    "I0": 10000,
+    "price_floor": 1,
+    "hinge_gain": 8.0,
+    "max_market_orders_per_turn": 10,
+    "starting_inventory": 10000
+  },
+  "sign": {
+    "scarcity_inv_below_I0": 1,
+    "glut_inv_above_I0": -1
+  },
+  "amp": "target * base / f(T)",
+  "T_definition": "Production capacity of one 5x5 field over a 24-day window at optimal watering with no fertilizer. Animal T is pre-discounted 30% for wheat-feed overhead and one build day. Calibration horizon, not the 30-day season.",
+  "target_definition": "Moving T units past I0 shifts price by target * base.",
+  "shape_functions": {
+    "linear": "f(x) = x",
+    "sq": "f(x) = x^2",
+    "sqrt": "f(x) = sqrt(x)",
+    "log": "f(x) = ln(1 + x)",
+    "log10": "f(x) = log10(1 + x)",
+    "hinge": "u = x / T; f(x) = u + 8 * max(0, u - 1)^2. Linear below T, quadratic spike above T. f(T) = 1 by construction."
+  },
+  "trading_rules": {
+    "seeds_and_animals": "Unlimited supply at fixed prices. Not on this curve.",
+    "sellable": ["WHEAT", "CARROT", "TOMATO", "STRAWBERRY", "MELON", "EGG", "MILK", "WOOL", "FERTILIZER"],
+    "buyable_via_BUY_PRODUCT": ["WHEAT", "FERTILIZER"],
+    "sell_quote": "Pre-sell inventory",
+    "buy_quote": "Post-buy inventory",
+    "roundtrip_identity": "Immediate buy then sell of the same item against an unchanged market nets exactly zero.",
+    "concurrent_orders": "Orders process one unit at a time across both players. Same-turn opponent dumps move your price.",
+    "floor_behavior": "At $1 the unit is still bought but is not added to market inventory, so the floor stays responsive to later buys.",
+    "money_stop": "If a player runs out of money mid-order, the remaining units are dropped."
+  },
+  "inventory_drains": {
+    "town_center": "1 of every product except fertilizer every 24 turns (once per day, flat all season).",
+    "shops": "Each unlocked shop instance consumes 1 of every demanded product every 4 turns. Single-product shops consume 2x. Up to 8 instances, drawn with replacement every 3 days."
+  },
+  "curves": {
+    "WHEAT": {
+      "id": "WHEAT",
+      "kind": "staple",
+      "base": 25,
+      "I0": 10000,
+      "T": 400,
+      "below_func": "sqrt",
+      "below_target": 0.8,
+      "below_amp": 1.0,
+      "above_func": "log",
+      "above_target": 0.2,
+      "above_amp": 0.834173,
+      "behavior": "Panics on scarcity, absorbs gluts. Safe to overproduce.",
+      "reference_prices": {
+        "I0_minus_T": 45,
+        "I0": 25,
+        "I0_plus_T": 20,
+        "I0_plus_2T": 19
+      }
+    },
+    "CARROT": {
+      "id": "CARROT",
+      "kind": "hinge_staple",
+      "base": 35,
+      "I0": 10000,
+      "T": 450,
+      "below_func": "hinge",
+      "below_target": 1.0,
+      "below_amp": 35.0,
+      "above_func": "sqrt",
+      "above_target": 0.7,
+      "above_amp": 1.154941,
+      "behavior": "Calm near base until demand passes T, then scarcity spikes. Glut falls to $1 by I0+2T. Consumed by pet cafes (2x) and farmers markets.",
+      "reference_prices": {
+        "I0_minus_T": 70,
+        "I0": 35,
+        "I0_plus_T": 10,
+        "I0_plus_2T": 1
+      }
+    },
+    "TOMATO": {
+      "id": "TOMATO",
+      "kind": "hinge_staple",
+      "base": 60,
+      "I0": 10000,
+      "T": 200,
+      "below_func": "hinge",
+      "below_target": 0.4,
+      "below_amp": 24.0,
+      "above_func": "sqrt",
+      "above_target": 0.6,
+      "above_amp": 2.545584,
+      "behavior": "Hinge scarcity. Smaller T than carrot, so gluts hit sooner. Consumed by pizza shops and farmers markets.",
+      "reference_prices": {
+        "I0_minus_T": 84,
+        "I0": 60,
+        "I0_plus_T": 24,
+        "I0_plus_2T": 9
+      }
+    },
+    "STRAWBERRY": {
+      "id": "STRAWBERRY",
+      "kind": "premium",
+      "base": 120,
+      "I0": 10000,
+      "T": 100,
+      "below_func": "sqrt",
+      "below_target": 0.7,
+      "below_amp": 8.4,
+      "above_func": "linear",
+      "above_target": 1.6,
+      "above_amp": 1.92,
+      "behavior": "Premium. Modest glut drives price to $1. Time and bundle sales.",
+      "reference_prices": {
+        "I0_minus_T": 204,
+        "I0": 120,
+        "I0_plus_T": 1,
+        "I0_plus_2T": 1
+      }
+    },
+    "MELON": {
+      "id": "MELON",
+      "kind": "premium",
+      "base": 250,
+      "I0": 10000,
+      "T": 300,
+      "below_func": "log",
+      "below_target": 0.2,
+      "below_amp": 8.761001,
+      "above_func": "sq",
+      "above_target": 3.6,
+      "above_amp": 0.01,
+      "behavior": "Barely reacts to scarcity, crashes hard on overproduction. Opposite of wheat.",
+      "reference_prices": {
+        "I0_minus_T": 300,
+        "I0": 250,
+        "I0_plus_T": 1,
+        "I0_plus_2T": 1
+      }
+    },
+    "EGG": {
+      "id": "EGG",
+      "kind": "hinge_staple",
+      "base": 50,
+      "I0": 10000,
+      "T": 332,
+      "below_func": "hinge",
+      "below_target": 0.4,
+      "below_amp": 20.0,
+      "above_func": "log",
+      "above_target": 0.2,
+      "above_amp": 1.721721,
+      "behavior": "Hinge scarcity, wheat-like glut absorption. Produced by geese. Consumed by bakeries and brunch spots.",
+      "reference_prices": {
+        "I0_minus_T": 70,
+        "I0": 50,
+        "I0_plus_T": 40,
+        "I0_plus_2T": 39
+      }
+    },
+    "MILK": {
+      "id": "MILK",
+      "kind": "premium",
+      "base": 160,
+      "I0": 10000,
+      "T": 122,
+      "below_func": "sqrt",
+      "below_target": 0.6,
+      "below_amp": 8.691432,
+      "above_func": "linear",
+      "above_target": 1.6,
+      "above_amp": 2.098361,
+      "behavior": "Premium. Small T; overproduction hits the floor quickly. Produced by cows.",
+      "reference_prices": {
+        "I0_minus_T": 256,
+        "I0": 160,
+        "I0_plus_T": 1,
+        "I0_plus_2T": 1
+      }
+    },
+    "WOOL": {
+      "id": "WOOL",
+      "kind": "premium",
+      "base": 200,
+      "I0": 10000,
+      "T": 105,
+      "below_func": "log",
+      "below_target": 0.2,
+      "below_amp": 8.577361,
+      "above_func": "sq",
+      "above_target": 3.2,
+      "above_amp": 0.05805,
+      "behavior": "Melon-like crash at smaller scale. Produced by sheep. Yarn stores consume 2x.",
+      "reference_prices": {
+        "I0_minus_T": 240,
+        "I0": 200,
+        "I0_plus_T": 1,
+        "I0_plus_2T": 1
+      }
+    },
+    "FERTILIZER": {
+      "id": "FERTILIZER",
+      "kind": "input",
+      "base": 100,
+      "I0": 10000,
+      "T": 200,
+      "below_func": "linear",
+      "below_target": 0.4,
+      "below_amp": 0.2,
+      "above_func": "linear",
+      "above_target": 0.4,
+      "above_amp": 0.2,
+      "behavior": "Symmetric linear. Buyable and sellable. Town center does not consume it.",
+      "reference_prices": {
+        "I0_minus_T": 140,
+        "I0": 100,
+        "I0_plus_T": 60,
+        "I0_plus_2T": 20
+      }
+    }
+  },
+  "premium_ids": ["STRAWBERRY", "MELON", "MILK", "WOOL"],
+  "premium_rule": "base > 100 and above_target > 1: even modest gluts go to the $1 floor."
+}

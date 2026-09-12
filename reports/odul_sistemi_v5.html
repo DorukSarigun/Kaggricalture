@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaggriculture • Ödül sistemi ve credit assignment</title>
+<style>
+:root{--bg:#f4f6f3;--ink:#182a25;--muted:#52665d;--green:#126b50;--line:#d5e1d9;--warn:#fff1d9;--paper:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 system-ui,-apple-system,Segoe UI,sans-serif}header{background:#163b30;color:#fff;padding:55px max(24px,calc((100vw - 1080px)/2)) 40px}header p{color:#d4e7dc;max-width:800px}.eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:12px;font-weight:700}h1{font-size:clamp(30px,5vw,48px);line-height:1.15;max-width:900px;margin:15px 0 20px}h2{font-size:26px;line-height:1.3;margin-top:0}h3{font-size:19px}main{max-width:1130px;margin:0 auto;padding:28px 24px 70px}section{background:var(--paper);border:1px solid var(--line);border-radius:15px;padding:30px;margin:24px 0;scroll-margin-top:20px}nav{display:flex;flex-wrap:wrap;gap:10px 22px;padding:10px 0}a{color:var(--green);text-underline-offset:4px}nav a{font-size:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.card{padding:18px;background:#f0f6f2;border-radius:10px}.value{font-size:29px;font-weight:750;display:block;color:var(--green)}.muted,small{color:var(--muted)}.callout{background:var(--warn);border-left:4px solid #bd7d17;padding:16px 20px;margin:22px 0}.good{background:#e9f4ed;border-color:var(--green)}code{font: .9em ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf2ee;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{background:#16332b;color:#e7f6ed;padding:20px;border-radius:9px;overflow:auto;line-height:1.7}pre code{background:none;padding:0;color:inherit;overflow-wrap:normal}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:15px}th,td{padding:12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{background:#edf4ef;font-size:13px}ul,ol{padding-left:24px}li{margin:7px 0}.flow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}.flow .box{flex:1;min-width:140px;background:#eaf3ed;border:1px solid var(--line);padding:15px;border-radius:8px}.arrow{align-self:center;color:var(--green);font-size:23px}.badge{display:inline-block;background:#d7efdf;color:#185539;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700}.off{background:#eee5d5;color:#72520f}label{display:block;margin:10px 0;font-size:14px;font-weight:600}input{display:block;width:100%;padding:10px;border:1px solid #9db5a6;border-radius:6px;background:#fff;color:var(--ink);font:inherit}output{font-size:25px;font-weight:700;color:var(--green)}.number{color:var(--green);font-size:13px;text-transform:uppercase;letter-spacing:.09em}.foot{font-size:13px;color:var(--muted)}button{padding:10px 18px;background:var(--green);color:white;border:0;border-radius:7px;font:inherit;cursor:pointer}a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #d88a10;outline-offset:4px}
+@media(max-width:600px){section{padding:21px}main{padding:15px}th,td{padding:9px}.arrow{display:none}}
+@media print{body{background:white;font-size:11pt}header{padding:20px;color:#182a25;background:white}header p{color:#52665d}main{padding:0}section{border-radius:0;break-inside:auto;padding:18px}h2,h3{break-after:avoid}nav,button{display:none}pre{white-space:pre-wrap;background:#eee;color:black}a{color:inherit}.grid,.flow{break-inside:avoid}}
+.visual{margin:24px 0;padding:20px;background:#f8faf7;border:1px solid var(--line);border-radius:12px}.visual figcaption{font-size:14px;color:var(--muted);margin-top:12px}.visual-scroll{overflow-x:auto}.diagram{display:block;width:100%;height:auto;min-width:620px}.diagram text{font-family:system-ui,sans-serif;fill:var(--ink);font-size:15px}.diagram .label{font-size:12px;fill:var(--muted)}.diagram .heading{font-size:17px;font-weight:700}.diagram .light{fill:white}.diagram .positive{fill:#126b50}.diagram .negative{fill:#a24921}.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;margin:10px 0}.legend span:before{content:'';display:inline-block;width:22px;height:4px;background:var(--green);margin-right:8px;vertical-align:middle}.legend .amber:before{background:#ad671c}.legend .blue:before{background:#346dba}.diagram .line{stroke:#126b50;stroke-width:3;fill:none}.diagram .audit{stroke:#ad671c;stroke-width:2;stroke-dasharray:7 5;fill:none}.diagram .node{fill:#e5f2e8;stroke:#b9d6c1}.diagram .audit-node{fill:#fff0d8;stroke:#ddbc81}@media print{.visual{break-inside:avoid}.diagram{min-width:0}.visual-scroll{overflow:visible}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">Kaggriculture / Teknik açıklama / V5</div>
+<h1>Para nereden geliyor,<br>öğrenme kredisi nereye gidiyor?</h1>
+<p>Reward hesabı, kasa defteri, FIFO takibi, GAE ve PPO arasındaki ilişki. Bu rapor mevcut uygulamayı açıklar; ideal bir kredi sisteminin zaten kurulduğunu iddia etmez.</p>
+<small style="color:#c4ded0">Kod ve kayıt incelemesi: 11 Eylül 2026 · Koşu: runs/terminal_v5 · Çevrimdışı, bağımsız HTML</small>
+</header>
+<main>
+<nav aria-label="İçindekiler"><a href="#ozet">Özet</a><a href="#reward">Gerçek reward</a><a href="#kasa">Kasa defteri</a><a href="#fifo">FIFO / yerel kredi</a><a href="#gae">GAE</a><a href="#ppo">PPO ve tokenlar</a><a href="#sorunlar">Sınırlar</a><a href="#kaynaklar">Kaynak kod</a></nav>
+
+<section id="ozet">
+<div class="number">01 / Aktif sözleşme</div><h2>Şu anda agent ne için ödüllendiriliyor?</h2>
+<p><strong>Sezon sonunda rakibinden daha fazla bankadaki paraya sahip olmak için.</strong> Alış, ekim, sulama veya satış anında ayrıca bir çevre reward'ı verilmez. Bu aksiyonların sonuçları sezon sonu parasını etkiler.</p>
+<div class="grid"><div class="card"><span class="value">1,0</span>Global actor katsayısı<br><span class="badge">Aktif</span></div><div class="card"><span class="value">0,0</span>Yerel span actor katsayısı<br><span class="badge off">Yalnız kayıt</span></div><div class="card"><span class="value">0,0</span>Potential shaping katsayısı<br><span class="badge off">Reward'a katkısı yok</span></div></div>
+<p>Koşu ayarları: <code>gamma=0.999</code>, <code>gae_lambda=0.95</code>, <code>lifecycle_credit_mode=economic_span</code>. Economic-span modunun açık olması, yerel kredinin actor loss'a eklendiği anlamına gelmez; onu <code>span_policy_coef</code> belirler.</p>
+<div class="flow" aria-label="Öğrenme akışı"><div class="box">Gerçek oyun<br><strong>Terminal para farkı</strong></div><div class="arrow">→</div><div class="box">Critic + GAE<br><strong>Tur advantage'ı</strong></div><div class="arrow">→</div><div class="box">Action span'ları<br><strong>PPO actor loss</strong></div></div>
+<p class="muted">Paralel denetim yolu: gerçekleşen işlemler → kasa defteri ve FIFO → JSON kayıtları. Bu yol varsayılan olarak ekstra reward üretmez.</p>
+<figure class="visual"><div class="visual-scroll">
+<svg class="diagram" viewBox="0 0 940 330" role="img" aria-labelledby="routes-title routes-desc">
+<title id="routes-title">Öğrenme yolu ile denetim yolu ayrı</title><desc id="routes-desc">Gerçek oyun sonucu terminal reward üzerinden GAE ve PPO'ya ulaşır. Aynı oyunun işlemleri kasa ve FIFO kayıtlarına gider. Yerel kredi katsayısı sıfır olduğu için bu ikinci yoldan actor loss'a katkı gelmez.</desc>
+<defs><marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#126b50"/></marker></defs>
+<rect class="node" x="15" y="117" width="150" height="80" rx="12"/><text x="90" y="150" text-anchor="middle" class="heading">Gerçek oyun</text><text x="90" y="177" text-anchor="middle" class="label">Durum + işlemler</text>
+<path class="line" d="M165 145H190V73H230" marker-end="url(#arrow-green)"/>
+<rect class="node" x="235" y="35" width="190" height="80" rx="12"/><text x="330" y="67" text-anchor="middle" class="heading">Terminal reward</text><text x="330" y="93" text-anchor="middle" class="label">Final gold farkı / 3000</text>
+<path class="line" d="M425 75H477" marker-end="url(#arrow-green)"/><rect class="node" x="482" y="35" width="180" height="80" rx="12"/><text x="572" y="67" text-anchor="middle" class="heading">Critic + GAE</text><text x="572" y="93" text-anchor="middle" class="label">Beklenti → advantage</text>
+<path class="line" d="M662 75H714" marker-end="url(#arrow-green)"/><rect x="720" y="35" width="200" height="80" rx="12" fill="#126b50"/><text x="820" y="67" text-anchor="middle" class="heading light">PPO / actor</text><text x="820" y="93" text-anchor="middle" class="light">Global katsayı = 1</text>
+<path class="audit" d="M165 170H190V245H235"/><rect class="audit-node" x="235" y="205" width="190" height="80" rx="12"/><text x="330" y="238" text-anchor="middle" class="heading">Kasa + FIFO</text><text x="330" y="264" text-anchor="middle" class="label">Mutabakat / kaynak takibi</text>
+<path class="audit" d="M425 245H482"/><rect class="audit-node" x="482" y="205" width="180" height="80" rx="12"/><text x="572" y="238" text-anchor="middle" class="heading">JSON kayıtları</text><text x="572" y="264" text-anchor="middle" class="label">Yerel kredi hesaplanır</text>
+<path class="audit" d="M662 245H750"/><circle cx="779" cy="245" r="23" fill="#fff0d8" stroke="#ad671c" stroke-width="2"/><path d="M765 231L793 259M793 231L765 259" stroke="#ad671c" stroke-width="3"/><text x="820" y="302" text-anchor="middle" class="label">Yerel katsayı = 0 → katkı yok</text>
+</svg></div><div class="legend"><span>Aktif öğrenme yolu</span><span class="amber">Denetim / kayıt yolu</span></div><figcaption>Alt yolun kayıt üretmesi, üst yoldaki actor'a ekstra ödül verildiği anlamına gelmez.</figcaption></figure>
+</section>
+
+<section id="reward">
+<div class="number">02 / Çevre reward'ı</div><h2>Formül: final gold farkı</h2>
+<pre><code>Terminal değilse: r_t = 0
+Terminal ise:    r_t = (bizim_gold − rakip_gold) / reward_scale
+
+Bu koşuda reward_scale = 3000</code></pre>
+<p>Bu, başlangıca göre kendi kârımız değil, <strong>rakiple aramızdaki final para farkıdır</strong>. 1000 gold kâr etmiş olsak bile rakip 2000 kâr etmişse reward negatif olabilir. Satılmamış ürün, tohum, hayvan ve arazi terminal skora ayrıca değer olarak eklenmez.</p>
+<p>Oyun içindeki adımlar 720-step sezon konfigürasyonunda 719 transition olarak kaydediliyor. Bu akışta terminal ödül son transition'dadır; öncesinde tekrar tekrar eklenmez. Bu eğitim skoru motorun <code>environment_reward</code> alanından ayrı hesaplanır.</p>
+<h3>Örnek: tohumdan satışa</h3>
+<p>Aşağıdaki rakamlar öğretici bir senaryodur; sabit piyasa fiyatı veya gerçek replay değildir. Başlangıç parası 3000, tohum maliyeti 10, toplam satış 100 kabul edilmiştir.</p>
+<div class="table-wrap"><table><thead><tr><th>Olay</th><th>Nakit hareketi</th><th>Bizim para</th><th>O andaki r_t</th></tr></thead><tbody>
+<tr><td>BUY_SEED</td><td>−10</td><td>2990</td><td>0</td></tr><tr><td>PLANT / WATER / HARVEST</td><td>0</td><td>2990</td><td>0</td></tr><tr><td>SELL</td><td>+100</td><td>3090</td><td>0 — henüz terminal değil</td></tr><tr><td>Sezon bitti; rakip 3000</td><td>Yeni nakit hareketi yok</td><td>3090</td><td>90 / 3000 = +0,03</td></tr></tbody></table></div>
+<div class="callout"><strong>“Harcama negatif reward değil mi?”</strong><br>Kasada negatif işlem, evet. O anda negatif <code>r_t</code>, hayır. Harcama geri kazanılmazsa final para daha düşük olur ve terminal sonuca yansır. Ancak bu sonucu satın alma kararına öğrenme kredisi olarak geri taşımak ayrı bir problemdir.</div>
+<h3>Terminal reward hesaplayıcı</h3>
+<figure class="visual"><div class="visual-scroll"><svg class="diagram" viewBox="0 0 940 330" role="img" aria-labelledby="timeline-title timeline-desc">
+<title id="timeline-title">Nakit hemen değişir, reward terminalde gelir</title><desc id="timeline-desc">Örnek senaryoda tohum alırken para 10 azalır, satışta 100 artar. Alış, ekim, bakım ve satışta reward sıfırdır. Rakip 3000 iken sezon sonunda 3090 para için reward 0,03 olur. Düğümler arasındaki mesafeler gerçek süreyi göstermez.</desc>
+<text x="20" y="30" class="heading">Aynı olayın iki ayrı kaydı</text>
+<path d="M160 90H860" stroke="#b8cec0" stroke-width="4"/>
+<g fill="#126b50"><circle cx="180" cy="90" r="9"/><circle cx="340" cy="90" r="9"/><circle cx="500" cy="90" r="9"/><circle cx="660" cy="90" r="9"/><circle cx="850" cy="90" r="9"/></g>
+<g text-anchor="middle"><text x="180" y="64">Alış</text><text x="340" y="64">Ekim</text><text x="500" y="64">Bakım / hasat</text><text x="660" y="64">Satış</text><text x="850" y="64">Sezon sonu</text></g>
+<text x="20" y="156" class="heading">Nakit Δ</text><text x="20" y="250" class="heading">Reward</text>
+<g text-anchor="middle"><rect x="125" y="125" width="110" height="50" rx="8" fill="#fce7db"/><text x="180" y="157" class="negative heading">−10</text><text x="340" y="157">0</text><text x="500" y="157">0</text><rect x="605" y="125" width="110" height="50" rx="8" fill="#d9efdf"/><text x="660" y="157" class="positive heading">+100</text><text x="850" y="157">0</text>
+<text x="180" y="196" class="label">Bakiye 2990</text><text x="660" y="196" class="label">Bakiye 3090</text>
+<text x="180" y="250">0</text><text x="340" y="250">0</text><text x="500" y="250">0</text><text x="660" y="250">0</text><rect x="790" y="219" width="120" height="50" rx="8" fill="#126b50"/><text x="850" y="251" class="heading light">+0,03</text><text x="850" y="293" class="label">(3090 − 3000) / 3000</text></g>
+</svg></div><figcaption>Öğretici örnek, gerçek replay değil. Zaman aralıkları ölçekli değildir. Satış anında artan nakit ile terminalde oluşan reward farklı şeylerdir.</figcaption></figure>
+<div class="grid"><label>Bizim final gold<input id="own" type="number" value="3090" min="0"></label><label>Rakibin final gold<input id="opp" type="number" value="3000" min="0"></label><label>Reward ölçeği<input id="scale" type="number" value="3000" min="1"></label></div>
+<p>Terminal reward: <output id="reward-output" aria-live="polite">0.030000</output></p>
+<p class="muted">Bu araç yalnız yukarıdaki formülü hesaplar; training'i veya dosyaları değiştirmez. Terminalden önce sonuç her zaman 0'dır.</p>
+</section>
+
+<section id="kasa">
+<div class="number">03 / Denetlenebilir para hareketleri</div><h2>Kasa defteri reward değildir</h2>
+<p><code>CashLedger</code>, iki oyuncunun gerçekleşen market işlemlerini her tur kaydeder. BUY_SEED, BUY_PRODUCT, BUY_ANIMAL, HIRE ve BUY_LAND negatif; SELL pozitiftir. İstenen miktar değil, gerçekten gerçekleşen işlem miktarı ve tutarı esas alınır.</p>
+<pre><code>after_money − before_money = toplam_işaretli_execution_tutarı
+Mutabakat toleransı: 1e-7
+Fark toleransı aşarsa: hata; sessiz residual düzeltmesi yok.</code></pre>
+<p>Motor önce birim aksiyonlarını, sonra market işlemlerini işler. Trace bu akışı kopyalar üzerinde tekrarlar; iki tarafın market sırasını ve dinamik fiyatları hesaba katar. Sonuç gerçek bakiye farkıyla karşılaştırılır. Aynı turdaki market emri çiftçinin aksiyonunu tüketmez.</p>
+<p><strong>Bu defterin actor'a ayrıca eklenmemesi bilinçlidir.</strong> Final para farkını ve bütün nakit değişimlerini gelişigüzel birlikte ödüllendirmek hedefin ağırlığını veya zamansal tercihini değiştirebilir. Kasayı doğrulamakla nakit değişimini reward yapmak aynı işlem değildir.</p>
+<h3>Dosyalarda ne görürsün?</h3>
+<ul><li><code>cash_ledger.json</code>: iki tarafın işlem kayıtları, başlangıç/final bakiye ve mutabakat hatası.</li><li><code>summary.json → cash_accounting</code>: bizim kasa özeti.</li><li><code>cash_minus_lifecycle_credit</code>: nakit getirisi ile ölçeklenmiş yerel kredi arasındaki fark. Sıfır olmak zorunda değildir; kapsamlar farklıdır.</li></ul>
+</section>
+
+<section id="fifo">
+<div class="number">04 / Ayrı bir defter</div><h2>FIFO ve lifecycle kredisi tam olarak ne yapıyor?</h2>
+<p>Oyun aynı tür item'ları sayaçlarda birleştirir. Tracker kendi sentetik lot ve plant kimliklerini üretir. FIFO, ilgili envanter kuyruğundaki en eski lotu önce tüketir; taşınan ürünlerin kaynak bilgisi taşınır. Bu, oyunun verdiği gerçek fiziksel nesne kimliği veya nedensellik kanıtı değildir.</p>
+<div class="flow"><div class="box">Seed lot<br><code>alış</code></div><div class="arrow">→</div><div class="box">Plant ID<br><code>ekim / bakım</code></div><div class="arrow">→</div><div class="box">Product lot<br><code>hasat / taşıma</code></div><div class="arrow">→</div><div class="box">Sale allocation<br><code>satış</code></div></div>
+<h3>Mevcut yerel atama kuralları</h3>
+<div class="table-wrap"><table><thead><tr><th>Kaynak</th><th>Yerel kredi hesabı</th><th>Aktif training'e etkisi</th></tr></thead><tbody>
+<tr><td>Satışa ulaşan bitki</td><td>Bitkinin toplam satış geliri − bir tohum maliyeti. İlişkili alış, ekim, başarılı sulama/gübreleme, hasat, depoya transfer ve satış event'lerine eşit paylaştırılır.</td><td rowspan="4"><strong>0</strong><br><code>span_policy_coef=0</code>.<br>Hesaplanır ve loglanır; actor loss'a eklenmez.</td></tr>
+<tr><td>Satışa ulaşmayan ücretli tohum</td><td>Maliyet yalnız satın alma span'ına negatif yazılır.</td></tr>
+<tr><td>BUY_PRODUCT → SELL</td><td>Satılan kısımda gelir − ayrılan maliyet, alış ve satışa paylaşılır. Satışa dönüşmeyen maliyet alış span'ında negatif kalır.</td></tr>
+<tr><td>HIRE</td><td>Yalnız gerçekleşen kiralama maliyeti negatif. İşçinin sonraki üretim faydası kiralama event'ine bağlanmış değil.</td></tr>
+</tbody></table></div>
+<p>Bir toplu alışta 5 tohumun yalnız 1'i satışa ulaştıysa, o bitkinin neti kendi zincirine dağılır; diğer 4 tohumun maliyeti alış span'ında kalır. Bu güncel kural <strong>alışa bütün lot netini, diğerlerine tekrar bitki netini yazmak</strong> değildir. Aynı action_id'ye gelen assignment'lar training kredisi oluşturulurken toplanır.</p>
+<p>Yerel loss açılırsa PURCHASE/FARM/TRADE/HIRE rolleri için ayrı running RMS ile ölçekleme uygulanır. Ortalama çıkarılmaz; bu ölçekleme öğrenilmiş bir baseline değildir. Rol dengeli PPO ile yardımcı bir hedef oluşturur.</p>
+<div class="callout"><strong>Eksik kapsam:</strong> BUY_LAND getirisi, tam hayvan üretim zinciri, HIRE'ın üretim faydası, satın alınan gübre/yemin üretime katkısı ve yürüyüşlerin hasat bağlantısı tamamlanmış değil. Tekrarlı ürün veren bitkide atama toplam plant satışları üzerinden ilerler; her hasat için ayrı nedensel zincir değildir.</div>
+<p><strong>FIFO faydalı bir açıklama kaydıdır; “bu aksiyon daha iyi bir alternatiften üstündü” sonucunu vermez.</strong> Kârı eşit paylaştırmak toplamı koruyabilir ama kararların doğru öğrenilmesini garanti etmez. Ürünün satılamaması kötü alıştan da, sonraki yanlış bakımdan da kaynaklanabilir.</p>
+</section>
+
+<section id="gae">
+<div class="number">05 / Zaman içindeki kredi</div><h2>Reward nasıl advantage'a dönüşüyor?</h2>
+<p>Critic <code>V(s_t)</code>, mevcut girdiden gelecekteki indirimli getiriyi tahmin eder. Reward gerçekleşen skor; value beklenti; advantage ise bu beklentiye göre öğrenme sinyalidir. Negatif reward alan bir oyun içindeki bütün advantage'ların negatif olması gerekmez.</p>
+<pre><code>δ_t = r_t + γ · (1 − done_t) · V(s_{t+1}) − V(s_t)
+A_t = δ_t + γ · λ · (1 − done_t) · A_{t+1}
+Critic hedefi = A_t + eski V(s_t)</code></pre>
+<p>Terminalde bootstrap sıfırlanır. Episode sınırının ötesinden getiri taşınmaz. Critic hedefi mevcut ayarlarda GAE tabanlıdır; her adımda doğrudan final para etiketini kullanmakla aynı değildir.</p>
+<h3>Neden yüzlerce hamle önceki alış zor öğreniliyor?</h3>
+<p>Terminal TD hatasının d hamle önceki advantage'a <em>doğrudan</em> katsayısı <code>(γλ)^d</code>. Mevcut γ=0.999 ve λ=0.95 için:</p>
+<div class="table-wrap"><table><thead><tr><th>Terminalden uzaklık</th><th>GAE doğrudan katsayısı</th><th>λ=1 için γ^d</th></tr></thead><tbody><tr><td>24 hamle</td><td>0,28506</td><td>0,97627</td></tr><tr><td>100 hamle</td><td>0,005357</td><td>0,90479</td></tr><tr><td>240 hamle</td><td>0,000003543</td><td>0,78653</td></tr><tr><td>480 hamle</td><td>0,00000000001255</td><td>0,61863</td></tr></tbody></table></div>
+<p>Bu tablo toplam gradyan miktarı değildir. Critic, değeri erken durumlara taşıyarak öğrenmeye yardımcı olabilir. Ancak başlangıçta bu beklenti doğru öğrenilmemişse, seyrek terminal sinyalini keşfetmek zorlaşır. λ=1 bunu doğrudan Monte Carlo getirisine yaklaştırır; karşılığında varyans artabilir. <strong>λ=1 deneyi önerildi, bu koşuda uygulanmış değil.</strong></p>
+<div class="grid"><label>γ<input id="gamma" type="number" value="0.999" min="0" max="1" step="0.001"></label><label>λ<input id="lambda" type="number" value="0.95" min="0" max="1" step="0.01"></label><label>Uzaklık (hamle)<input id="distance" type="number" value="240" min="0" step="1"></label></div>
+<p>Doğrudan katsayı: <output id="gae-output" aria-live="polite">3.543092e-6</output></p>
+<figure class="visual"><div class="legend"><span>Seçilen λ ile (γλ)ᵈ</span><span class="blue">Karşılaştırma: λ = 1, γᵈ</span></div><div class="visual-scroll">
+<svg class="diagram" viewBox="0 0 940 355" role="img" aria-labelledby="decay-title decay-desc">
+<title id="decay-title">Terminal sinyalinin uzaklıkla azalması</title><desc id="decay-desc">Yatay eksen terminalden önceki hamle sayısı, dikey eksen logaritmik doğrudan katkı katsayısıdır. Yukarıdaki gamma ve lambda değişince iki eğri yeniden hesaplanır. Bu bir başarı veya toplam gradyan grafiği değildir.</desc>
+<g stroke="#d5e1d9" stroke-dasharray="4 4"><path d="M90 40H890M90 95H890M90 150H890M90 205H890M90 260H890"/></g>
+<g class="label" text-anchor="end"><text x="76" y="45">1</text><text x="76" y="100">10⁻³</text><text x="76" y="155">10⁻⁶</text><text x="76" y="210">10⁻⁹</text><text x="76" y="265">10⁻¹²</text></g>
+<path d="M90 35V260H895" fill="none" stroke="#64796d"/>
+<g class="label" text-anchor="middle"><text x="90" y="286">0</text><text x="290" y="286">120</text><text x="490" y="286">240</text><text x="690" y="286">360</text><text x="890" y="286">480</text><text x="490" y="320">Terminalden önceki uzaklık (hamle)</text></g>
+<path id="decay-mc" d="M90 40L890 43.824" fill="none" stroke="#346dba" stroke-width="3" stroke-dasharray="8 5"/>
+<path id="decay-selected" d="M90 40L890 239.522" fill="none" stroke="#126b50" stroke-width="3"/>
+</svg></div><p id="decay-status" class="muted" aria-live="polite">γ=0.999, λ=0.95. Grafik aralığı 0–480 hamle.</p><figcaption><strong>Dikey eksen logaritmik:</strong> her çizgi arası 1000 kat farktır. 10⁻¹² altındaki değerler grafiğin tabanında gösterilir. Yalnız γ ve λ grafiği değiştirir; “uzaklık” alanı yukarıdaki tek değer hesabı içindir. Eğriler, critic'in taşıdığı diğer sinyalleri içermez.</figcaption></figure>
+<noscript><p class="callout">JavaScript kapalı: hesaplayıcılar güncellenmez. Yukarıdaki formüller, başlangıç sonuçları ve bütün rapor okunabilir.</p></noscript>
+</section>
+
+<section id="ppo">
+<div class="number">06 / Aynı turun kararları</div><h2>PPO hangi tokenı nasıl güncelliyor?</h2>
+<p>Örnek bir tur:</p><pre><code>farmer: WATER
+hand 0: NORTH
+market: BUY_SEED WHEAT 5
+market: STOP</code></pre>
+<p>Bunlar ayrı action span'larıdır. Her span içindeki gerçekten seçim yapılan tokenların log olasılıkları toplanır. Tek seçeneği olan yapısal tokenlar actor terimi üretmez. STOP marketi bitiren gerçek bir seçimse kendi span'ıyla eğitilir; zorunlu STOP ise stochastic karar değildir.</p>
+<pre><code>log π(span) = Σ log π(stochastic token | önceki tokenlar, observation)
+ratio = exp(yeni_logπ(span) − eski_logπ(span))
+L_span = −min(ratio · A_t, clip(ratio, 0.8, 1.2) · A_t)</code></pre>
+<p><strong>Mevcut global yolda aynı turun dört span'ı aynı A_t'yi alır.</strong> WATER iyi, BUY_SEED kötü olsa bile o tek örnekte ayrı karşı-olgusal advantage hesaplanmaz. Farklı örnekler üzerinden istatistiksel öğrenme mümkündür; fakat bu ayrımın garantisi değildir.</p>
+<p>Önce minibatch'teki tur advantage'ları ortalaması çıkarılıp standart sapmaya bölünür. Sonra ilgili span'lara genişletilir. Loss önce UNIT ve MARKET grupları içinde, sonra aktif gruplar arasında ortalanır. Böylece market karar sayısı veya işçi sayısı ağırlıkları etkiler. Bu <strong>factorized, rol dengeli surrogate</strong>, standart joint-action PPO ile matematiksel olarak aynı değildir.</p>
+<h3>Toplam loss</h3>
+<figure class="visual"><div class="visual-scroll"><svg class="diagram" viewBox="0 0 940 310" role="img" aria-labelledby="shared-title shared-desc">
+<title id="shared-title">Ayrı kararlar, aynı tur advantage'ı</title><desc id="shared-desc">Bir turun normalize advantage'ı farmer WATER, hand NORTH, market BUY SEED WHEAT 5 ve STOP span'larının her birine gider. Span olasılıkları farklı, kullanılan advantage aynıdır. Birleşik alış span'ındaki operation, item ve quantity tokenları tek ratio oluşturur.</desc>
+<rect x="318" y="15" width="304" height="65" rx="12" fill="#126b50"/><text x="470" y="44" class="heading light" text-anchor="middle">Tek tur advantage'ı: Aₜ</text><text x="470" y="65" class="light" text-anchor="middle">Minibatch normalizasyonundan sonra</text>
+<path d="M470 80V110M120 110H820M120 110V140M350 110V140M590 110V140M820 110V140" class="line"/>
+<g text-anchor="middle"><rect x="20" y="145" width="200" height="90" rx="10" class="node"/><text x="120" y="174" class="label">FARMER</text><text x="120" y="201" class="heading">WATER</text><text x="120" y="224" class="label">ratio₁ × aynı Aₜ</text>
+<rect x="250" y="145" width="200" height="90" rx="10" class="node"/><text x="350" y="174" class="label">HAND 0</text><text x="350" y="201" class="heading">NORTH</text><text x="350" y="224" class="label">ratio₂ × aynı Aₜ</text>
+<rect x="480" y="145" width="220" height="90" rx="10" class="node"/><text x="590" y="174" class="label">MARKET / TEK SPAN</text><text x="590" y="201" class="heading">BUY_SEED WHEAT 5</text><text x="590" y="224" class="label">ratio₃ × aynı Aₜ</text>
+<rect x="720" y="145" width="200" height="90" rx="10" class="node"/><text x="820" y="174" class="label">MARKET</text><text x="820" y="201" class="heading">STOP</text><text x="820" y="224" class="label">ratio₄ × aynı Aₜ</text></g>
+<text x="470" y="277" text-anchor="middle" class="label">Şema PPO clipping öncesi terimleri gösterir; forced tokenlar seçim terimi üretmez.</text>
+</svg></div><figcaption><strong>Ayrı output head ≠ ayrı advantage.</strong> Şu an model her karar için farklı log olasılığı üretir, ancak o tur için “WATER iyi, BUY_SEED kötü” diye ayrı bir katkı etiketi verilmez.</figcaption></figure>
+<pre><code>L = 1.0 × global_policy_loss
+  + 0.0 × lifecycle_span_loss
+  + 0.5 × value_loss
+  − entropy_coef × entropy</code></pre>
+<p>Entropy katsayısı bu koşuda aşamaya göre değişir. Entropy, final gold reward'ı değil ayrı bir keşif düzenleyicisidir. Value loss da tahmin hatasıdır; reward olarak kasaya veya environment'a eklenmez. Ortak encoder ağırlıkları actor ve critic tarafından birlikte etkilenebilir.</p>
+<div class="callout good"><strong>Log okuma kuralı:</strong> <code>lifecycle_policy_loss</code> veya <code>economic_span_credit_sum</code> sıfırdan farklı olabilir. Katsayı 0 ise yerel loss toplam optimizasyon hedefine eklenmez. Ham loss değerinin görünmesi, agent'ın o ödülle eğitildiğini göstermez.</div>
+<h3>Neden sürekli kaybederken bazı aksiyonlar desteklenebilir?</h3>
+<p>−1,0 getiri, −1,2 beklenen bir duruma göre daha iyidir; advantage pozitif olabilir. Ayrıca minibatch merkezlemesi işaretleri göreli hâle getirir. Bu mekanizmalar tek başına hata değildir. Ancak hemen her oyun iflasla bitiyorsa faydalı örnek azlığı, critic yanlılığı ve rakip performansındaki değişim doğru davranışı ayırt etmeyi zorlaştırabilir.</p>
+</section>
+
+<section id="sorunlar">
+<div class="number">07 / Doğruluk ile öğrenme başarısı farklı</div><h2>Neyi doğruladık, neyi doğrulamadık?</h2>
+<div class="grid"><div class="card"><h3>Doğrulanan mekanik</h3><ul><li>Terminal para farkı, doğru oyuncu perspektifi.</li><li>Reward'ın yalnız terminalde bir kez eklenmesi.</li><li>Kasa defterinin gerçek bakiye ile mutabakatı.</li><li>STOP/HIRE/arazi için global gradyan bağlantısı.</li><li>Yerel katsayı 0 iken actor loss'a katkı olmaması.</li></ul></div><div class="card"><h3>Henüz garanti olmayan</h3><ul><li>Tohum alışının uzun vadeli faydasını öğrenme.</li><li>Yürüyüş, bakım, işçi ve arazi katkısını ayırma.</li><li>Alternatif kararın daha iyi olup olmadığını ölçme.</li><li>Tam oyunda kazanma veya genelleme.</li></ul></div></div>
+<p>11 Eylül incelemesinde CPU üzerinde 101 regresyon testi geçmişti. Kayıtlı iki V5 smoke episode'unda toplam reward sırasıyla −1,148333 ve −1,168667 idi; bunlar gerçek final para farkıyla eşleşiyordu. Test geçmesi iyi politika öğrenildiğinin kanıtı değildir.</p>
+<div class="callout"><strong>Notebook tuzağı:</strong> CLI V5 koşusu shaping'i 0 yapıyor; ancak <code>RewardConfig()</code> sınıfının doğrudan varsayılanı hâlâ <code>shaping_beta=0.25</code>. Notebook'ta aynı davranışı istiyorsan açıkça <code>RewardConfig(shaping_beta=0.0)</code> kullanmalısın. Bu rapor config'i değiştirmiyor.</div>
+<h3>Potential shaping nedir, şu anda var mı?</h3>
+<p>Kodda Φ(s), nakit, eldeki ürünlerin likidasyon değeri, tohum, hayvan ve büyüyen bitkilerin tahmini ekonomik değerinden hesaplanır. Shaping formülü <code>β × (γΦ(s') − Φ(s))</code>; terminal Φ sıfırdır. Uygun koşullarda indirimli toplamda potansiyel terimleri teleskoplanır. Bu koşuda β=0 olduğundan katkı 0'dır. Kodun Φ değerlerini hâlâ hesaplayıp raporlaması, shaping reward'ının aktif olduğu anlamına gelmez.</p>
+<h3>Koşudan anlık olmayan bir kesit</h3>
+<p><code>runs/terminal_v5</code> logu okunurken son tamamlanan episode <strong>3296</strong> idi. Son 200 oyunda kazanma 0/200, ortalama final para 0. Bu statik rapor otomatik güncellenmez. Aktif hedefin mekanik doğruluğu ile mevcut politikanın başarısızlığı aynı anda mümkün.</p>
+<p>Müfredat 100 oyun/aşama ile 401. oyunda tam aksiyon kümesine geçiyor. Önceki öneriler: daha yavaş veya başarı ölçütlü müfredat, λ karşılaştırması, ardından karar öncesi observation + aksiyon prefix'inden baseline. <strong>Bunlar bu raporla uygulanmadı.</strong> Navigation veya yeni reward eklenmedi; training sürecine müdahale edilmedi.</p>
+</section>
+
+<section id="kaynaklar">
+<div class="number">08 / Kod ve kayıt haritası</div><h2>Açıklamalar nereden geliyor?</h2>
+<p>Kaynak, bu çalışma alanındaki uygulamadır. Aşağıdaki bağlantılar rapor <code>reports/</code> klasöründen açıldığında ilgili yerel dosyalara gider. Dosyanın tek başına taşınması metni/hesaplayıcıları etkilemez; yalnız göreli kaynak bağlantıları çalışmayabilir.</p>
+<div class="table-wrap"><table><thead><tr><th>Dosya</th><th>İncelenen sorumluluk</th></tr></thead><tbody>
+<tr><td><a href="../reward.py">reward.py</a></td><td>RewardConfig, terminal_gold_difference_reward, transition_reward, ekonomik potansiyel.</td></tr>
+<tr><td><a href="../cash_accounting.py">cash_accounting.py</a> / <a href="../market_execution.py">market_execution.py</a></td><td>Gerçekleşen işlemler ve bağımsız kasa mutabakatı.</td></tr>
+<tr><td><a href="../lifecycle_tracking.py">lifecycle_tracking.py</a></td><td>Sentetik FIFO lotları, lifecycle event'leri ve STOP dahil span çıkarımı.</td></tr>
+<tr><td><a href="../span_credit.py">span_credit.py</a></td><td>Bitki/trade/HIRE ataması, action_id birleştirme ve running RMS.</td></tr>
+<tr><td><a href="../training.py">training.py</a> / <a href="../ppo.py">ppo.py</a></td><td>Episode buffer, GAE, normalized advantage, factorized PPO ve toplam loss.</td></tr>
+<tr><td><a href="../scripted_training.py">scripted_training.py</a> / <a href="../train_scripted.py">train_scripted.py</a></td><td>Collector, CLI katsayıları, loglar ve training bağlantısı.</td></tr>
+<tr><td><a href="../tests/test_terminal_cash.py">test_terminal_cash.py</a></td><td>Terminal gradyan, tam kasa ve değerlendirme sözleşmesi testleri.</td></tr>
+<tr><td><a href="../runs/terminal_v5/config.json">Koşu config'i</a> / <a href="../TRAINING_V5.md">TRAINING_V5.md</a></td><td>Bu raporun dayandığı aktif ayarlar ve V5 sözleşmesi.</td></tr>
+</tbody></table></div>
+<p class="foot">Rapor kapsamı: açıklama ve statik log kesiti. Finansal para muhasebesi, ödül tanımı ve nedensel öğrenme kredisi farklı kavramlardır. Yeni bir algoritmanın üstünlüğü iddia edilmez.</p>
+<button type="button" id="print-button">Yazdır / PDF olarak kaydet</button>
+</section>
+</main>
+<script>
+'use strict';
+const ids = ['own','opp','scale','gamma','lambda','distance'];
+function updateCalculators(){
+  const values=Object.fromEntries(ids.map(id=>[id,Number(document.getElementById(id).value)]));
+  const empty=ids.filter(id=>document.getElementById(id).value.trim()==='');
+  const validReward=!empty.some(id=>['own','opp','scale'].includes(id)) && [values.own,values.opp,values.scale].every(Number.isFinite) && values.own>=0 && values.opp>=0 && values.scale>0;
+  document.getElementById('reward-output').textContent=validReward?((values.own-values.opp)/values.scale).toFixed(6):'Geçerli, negatif olmayan gold ve pozitif ölçek gir.';
+  const validGAE=!empty.some(id=>['gamma','lambda','distance'].includes(id)) && [values.gamma,values.lambda,values.distance].every(Number.isFinite) && values.gamma>0 && values.gamma<=1 && values.lambda>=0 && values.lambda<=1 && values.distance>=0 && Number.isInteger(values.distance);
+  document.getElementById('gae-output').textContent=validGAE?Math.pow(values.gamma*values.lambda,values.distance).toExponential(6):'γ: (0,1], λ: [0,1], uzaklık: negatif olmayan tam sayı.';
+  const validCurve=!empty.some(id=>['gamma','lambda'].includes(id)) && Number.isFinite(values.gamma) && Number.isFinite(values.lambda) && values.gamma>0 && values.gamma<=1 && values.lambda>=0 && values.lambda<=1;
+  if(validCurve){
+    const curve=(base)=>Array.from({length:241},(_,i)=>{
+      const d=i*2;
+      const logValue=d===0?0:(base===0?-Infinity:d*Math.log10(base));
+      const x=90+d/480*800, y=40-Math.max(-12,logValue)/12*220;
+      return `${i===0?'M':'L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+    }).join(' ');
+    document.getElementById('decay-selected').setAttribute('d',curve(values.gamma*values.lambda));
+    document.getElementById('decay-mc').setAttribute('d',curve(values.gamma));
+    document.getElementById('decay-status').textContent=`γ=${values.gamma}, λ=${values.lambda}. Grafik aralığı 0–480 hamle; dikey eksen logaritmik.`;
+  }else{
+    document.getElementById('decay-selected').setAttribute('d','');
+    document.getElementById('decay-mc').setAttribute('d','');
+    document.getElementById('decay-status').textContent='Grafik için geçerli γ ve λ gir.';
+  }
+}
+ids.forEach(id=>document.getElementById(id).addEventListener('input',updateCalculators));
+document.getElementById('print-button').addEventListener('click',()=>window.print());
+updateCalculators();
+</script>
+</body>
+</html>

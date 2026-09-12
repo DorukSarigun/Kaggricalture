@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kaggricalture — sistem anlatımı</title>
+<style>
+  :root {
+    --bg: #161410;
+    --bg2: #1f1b16;
+    --paper: #26211b;
+    --ink: #f3eadc;
+    --muted: #b7aa96;
+    --line: #3d362c;
+    --accent: #d4a054;
+    --good: #7dba7a;
+    --bad: #c96a5a;
+    --info: #7ea0c4;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 18px/1.55 var(--sans);
+  }
+  a { color: var(--accent); }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  .wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+  nav {
+    position: sticky; top: 0; height: 100vh; overflow: auto;
+    padding: 28px 18px; border-right: 1px solid var(--line);
+    background: var(--bg2); font-size: 14px; line-height: 1.4;
+  }
+  nav h1 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 14px; }
+  nav a { display: block; color: var(--ink); text-decoration: none; padding: 5px 0; }
+  nav a:hover { color: var(--accent); }
+  nav .sub { padding-left: 12px; color: var(--muted); }
+  main { min-width: 0; width: 100%; max-width: 1160px; padding: 48px 56px 96px; }
+  h1, h2, h3 { font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; }
+  h1 { font-size: 40px; margin: 0 0 8px; }
+  h2 { font-size: 28px; margin: 56px 0 16px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 20px; margin: 32px 0 10px; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 21px; color: var(--muted); }
+  .note {
+    background: var(--paper); border-left: 3px solid var(--accent);
+    padding: 12px 16px; margin: 18px 0; color: var(--ink);
+  }
+  .warn { border-left-color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 14px 0 22px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .fig {
+    background: var(--bg2); border: 1px solid var(--line);
+    padding: 16px 12px 8px; margin: 20px 0 8px; overflow-x: auto;
+  }
+  .fig svg { display: block; width: 100%; min-width: 760px; height: auto; }
+  .fig path.l, .fig path.ll, .fig path.lx, .fig path.connector {
+    stroke: #b7aa96; stroke-width: 1.6; fill: none;
+    stroke-linejoin: round; marker-end: url(#system-arrow);
+  }
+  @media print {
+    .wrap { display: block; } nav { display: none; }
+    main { max-width: none; padding: 20px; }
+    .fig { break-inside: avoid; overflow: visible; }
+    .fig svg { min-width: 0; }
+  }
+  .cap { color: var(--muted); font-size: 14px; margin: 0 0 22px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: var(--paper); padding: 14px 16px; border: 1px solid var(--line); }
+  .card h3 { margin-top: 0; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .eq {
+    background: var(--paper); padding: 12px 16px; margin: 12px 0 18px;
+    font-family: var(--mono); font-size: 15px; overflow-x: auto;
+    border: 1px solid var(--line);
+  }
+  footer { color: var(--muted); font-size: 14px; margin-top: 64px; }
+  @media (max-width: 900px) {
+    .wrap { grid-template-columns: 1fr; }
+    nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { padding: 28px 20px 64px; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>İçindekiler</h1>
+  <a href="#giris">Giriş</a>
+  <a href="#oyun">Oyun</a>
+  <a href="#gozlem">Gözlem</a>
+  <a href="#aksiyon">Aksiyon grameri</a>
+  <a href="#ag">Sinir ağı</a>
+  <a class="sub" href="#ag-tile">Tile ve farm</a>
+  <a class="sub" href="#ag-state">State</a>
+  <a class="sub" href="#ag-decoder">Decoder</a>
+  <a href="#ornekleme">Örnekleme</a>
+  <a href="#odul">Ödül</a>
+  <a class="sub" href="#odul-skor">Skor defteri</a>
+  <a class="sub" href="#odul-phi">Potential Φ</a>
+  <a class="sub" href="#odul-span">İş defteri</a>
+  <a class="sub" href="#odul-eski">Eski modlar</a>
+  <a href="#tracker">Yaşam döngüsü</a>
+  <a href="#ppo">PPO</a>
+  <a href="#mufredat">Müfredat</a>
+  <a href="#egitim">Eğitim döngüsü</a>
+  <a href="#kosular">Aktif koşular</a>
+</nav>
+<main>
+  <h1>Kaggricalture sistem anlatımı</h1>
+  <p class="lead">Kodun şu anki hâli: masked otoregresif actor-critic, ekonomik action-span kredisi (şema 4) ve global critic. Kaynak dosyalar birebir okundu; sayılar koddan.</p>
+  <p>Model <code>KaggricultureActorCritic</code> · <strong>295&nbsp;879</strong> öğrenilebilir parametre. Aksiyon sözlüğü <strong>49</strong> token. Gözlem: 10×10 tarla + <strong>62</strong> global özellik. Varsayılan eğitim modu <code>economic_span</code>, <code>shaping_beta = 0</code>, <code>global_actor_coef = 0</code>.</p>
+
+  <div class="fig" aria-label="Sistem omurgası">
+    <svg id="system-overview" viewBox="0 0 860 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="system-overview-title">
+      <title id="system-overview-title">Encoder'dan decoder ve value head'e ayrı dallar, PPO'ya ayrı bağlantılar</title>
+      <defs>
+        <marker id="system-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#b7aa96"/></marker>
+        <style>
+          #system-overview .b { fill:#26211b; stroke:#3d362c; }
+          #system-overview .a { fill:#3a2e1c; stroke:#d4a054; }
+          #system-overview .t { fill:#f3eadc; font: 600 13px Georgia, serif; }
+          #system-overview .s { fill:#b7aa96; font: 10px ui-monospace, monospace; }
+        </style>
+      </defs>
+      <rect class="b" x="10" y="70" width="120" height="56" rx="6"/>
+      <text class="t" x="70" y="93" text-anchor="middle">Observation</text>
+      <text class="s" x="70" y="111" text-anchor="middle">10×10 + 62-d</text>
+      <path class="l" d="M130 98 H168"/>
+      <rect class="b" x="168" y="70" width="130" height="56" rx="6"/>
+      <text class="t" x="233" y="93" text-anchor="middle">Encoder</text>
+      <text class="s" x="233" y="111" text-anchor="middle">state 256-d</text>
+      <path class="l" d="M298 98 H316 V50 H336"/>
+      <path class="l" d="M298 98 H316 V146 H336"/>
+      <rect class="a" x="336" y="22" width="150" height="56" rx="6"/>
+      <text class="t" x="411" y="45" text-anchor="middle">GRU decoder</text>
+      <text class="s" x="411" y="63" text-anchor="middle">49 token, maskeli</text>
+      <rect class="b" x="336" y="118" width="150" height="56" rx="6"/>
+      <text class="t" x="411" y="141" text-anchor="middle">Value head</text>
+      <text class="s" x="411" y="159" text-anchor="middle">V(s) skaler</text>
+      <path class="l" d="M486 50 H524"/>
+      <path class="l" d="M486 146 H504 V154 H524"/>
+      <rect class="a" x="524" y="22" width="150" height="56" rx="6"/>
+      <text class="t" x="599" y="45" text-anchor="middle">Ortam adımı</text>
+      <text class="s" x="599" y="63" text-anchor="middle">aksiyon sözlüğü</text>
+      <path class="l" d="M674 50 H712"/>
+      <rect class="a" x="712" y="22" width="138" height="56" rx="6"/>
+      <text class="t" x="781" y="45" text-anchor="middle">Span kredi</text>
+      <text class="s" x="781" y="63" text-anchor="middle">iş defteri</text>
+      <path class="l" d="M781 78 V154 H712"/>
+      <rect class="b" x="524" y="126" width="188" height="56" rx="6"/>
+      <text class="t" x="618" y="149" text-anchor="middle">PPO update</text>
+      <text class="s" x="618" y="167" text-anchor="middle">yerel span + critic</text>
+    </svg>
+  </div>
+  <p class="cap">Şekil 1. Bir tur: gözlem → ağ → token dizisi → ortam → episode sonunda kredi → PPO.</p>
+
+  <h2 id="giris">1. Ne öğreniliyor?</h2>
+  <p>Ajan, Kaggle Kaggriculture’da scripted rakibe karşı 720 tur oynar. Kazanan, sezon sonunda kasası daha dolu olandır. Ortam tek bir Discrete buton beklemez: her tur bir <em>çiftçi emri</em>, o anda var olan her işçi için bir emir ve en fazla 10 market emri ister.</p>
+  <p>Ağ bunu dil modeli gibi üretir: önce farmer, sonra her hand, sonra market. Geçersiz seçenekler gramer maskesiyle kapatılır. Öğrenme PPO’dur; fakat <strong>span_v1</strong>’de politika gradyanı neredeyse tamamen episode sonundaki ekonomik iş notlarından gelir. Critic ise sezonun gold farkını öğrenir.</p>
+
+  <h2 id="oyun">2. Oyun kuralları (eğitimin gördüğü kadarıyla)</h2>
+  <table>
+    <tr><th>Ölçü</th><th>Değer</th></tr>
+    <tr><td>Harita</td><td>10×10, iki ayrı farm</td></tr>
+    <tr><td>Süre</td><td>30 gün × 24 saat = 720 tur</td></tr>
+    <tr><td>Başlangıç</td><td>3000 altın / oyuncu</td></tr>
+    <tr><td>Birimler</td><td>1 farmer + N gündüz işçisi (HIRE, Fibonacci ücret)</td></tr>
+    <tr><td>Tempo</td><td>Her birim turda 1 iş. İşçi ertesi tur gelir. Gece hands boşalır.</td></tr>
+    <tr><td>Sıra</td><td>Önce unit emirleri, sonra market</td></tr>
+    <tr><td>Hedef</td><td>Sezon sonu banka altını; eğitimde normalize rakip farkı</td></tr>
+  </table>
+  <p>Ürünler: buğday, havuç, domates, çilek, kavun. Hayvanlar: kaz, inek, koyun. Market fiyatı stoğa bağlı eğridir. Tohum alınır, ekilir, sulanır, hasat edilir, depoya konur, satılır. İşçi tutulursa ücret o anda düşer; el bir sonraki turda <code>hands[i]</code> olur.</p>
+
+  <h2 id="gozlem">3. Gözlem nasıl sayıya döner?</h2>
+  <p>Ham Kaggle observation üç parçaya ayrılır: <em>kendi tarlamız</em>, <em>rakip tarlası</em>, <em>global vektör</em>. Kod: <code>observation_encoding.py</code>, <code>tile_encoding.py</code>, <code>global_encoding.py</code>.</p>
+
+  <h3>3.1 Her kare (tile)</h3>
+  <p>Kategorik kimlikler (kanal sırası 3):</p>
+  <ul>
+    <li><code>TileKind</code> (6): EMPTY, LOCKED, WEED, PLANT, COOP, PASTURE → embedding 4-d</li>
+    <li>Ürün (5 ürün + boş = 6) → embedding 4-d, padding 0</li>
+    <li>Hayvan (3 + boş = 4) → embedding 3-d, padding 0</li>
+  </ul>
+  <p>Embedding kuralı: <code>max(2, ceil(log2(n)) + 1)</code>. Üç embedding birleşince <strong>11</strong> kanal.</p>
+  <p>Sayısal 26 kanal, <code>NUMERIC_FEATURE_NAMES</code>:</p>
+  <ul>
+    <li>12 dinamik: yaş, bugünkü temel ihtiyaç, ihmal serisi, yield doluluğu, piyasa/baz fiyat, ömür, gübre kalanı, hayvan bakım/gübre/bonus, doluluk</li>
+    <li>14 statik (ürün tipinden): ongoing/indefinite, tohum maliyeti/500, baz fiyat/250, ilk hasat/10, max yield zamanı, interval, adet tavanları, aksiyon maliyetleri, tile başına günlük verim</li>
+  </ul>
+  <p>Toplam tile girişi: 11 + 26 = <strong>37 kanal</strong>, şekil <code>(B, 37, 10, 10)</code> değil henüz — kategorikler <code>(B, 3, 10, 10)</code>, sayısallar <code>(B, 26, 10, 10)</code>.</p>
+
+  <h3>3.2 İşçi haritası</h3>
+  <p>İki spatial kanal: [0] farmer 1.0 olduğu karede; [1] her hand +1, sonra <code>n / (n + 4)</code> ile sıkıştırılır. Böylece birçok işçi aynı karede doyurur.</p>
+
+  <h3>3.3 Unit listesi (decoder için)</h3>
+  <p>Sıra oyunla aynı: index 0 farmer, sonrası <code>hands</code>. Her unit için <code>(y, x)</code> ve 14 özellik: <code>is_main_farmer</code> + 13 taşınan item (<code>count / (count + 10)</code>). CNN gather <code>(y, x)</code> ister; oyun koordinatı <code>(x, y)</code> olduğu için çevrilir.</p>
+
+  <h3>3.4 Global 62-d</h3>
+  <p><code>GLOBAL_FEATURE_NAMES</code> sırasıyla: sezon ilerlemesi; saatin sin/cos; 10 ürün fiyatı; 10 ürün market stoğu; kendi / rakip para; 13 shed; 5 tohum; 13 taşınan (tüm unit toplamı); kendi / rakip işçi sayısı; 8 dükkân sayısı. Paralar ve stoklar saturating ölçek <code>x / (x + c)</code> ile [0, 1)’e çekilir.</p>
+
+  <h2 id="aksiyon">4. Aksiyon grameri</h2>
+  <p>Dosya: <code>action_encoding.py</code>. Ortam sözlüğü şuna benzer:</p>
+  <div class="eq">{ farmer: [OP, …], hands: [[OP, …], …], market: [[OP, ITEM, QTY], …] }</div>
+  <p>Bu, 49 tokenlık bir diziye serilir. Yapısal tokenlar (BOS, FARMER, HAND, MARKET, END_ACTION, END_ORDER, EOS) zorunludur; policy onları seçmez, gramer dayatır. STOP market kafasına aittir: “başka emir yok” gerçek bir karardır.</p>
+
+  <div class="fig">
+    <svg id="token-diagram" viewBox="0 0 860 168" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Aksiyon tokenlarının sıralaması">
+      <style>
+        #token-diagram .tb { fill:#26211b; stroke:#3d362c; }
+        #token-diagram .ta { fill:#3a2e1c; stroke:#d4a054; }
+        #token-diagram .tt { fill:#f3eadc; font: 600 12px Georgia, serif; }
+        #token-diagram .ts { fill:#b7aa96; font: 10px ui-monospace, monospace; }
+      </style>
+      <rect class="tb" x="8" y="40" width="70" height="52" rx="5"/><text class="tt" x="43" y="62" text-anchor="middle">BOS</text><text class="ts" x="43" y="78" text-anchor="middle">zorunlu</text>
+      <rect class="tb" x="86" y="40" width="78" height="52" rx="5"/><text class="tt" x="125" y="62" text-anchor="middle">FARMER</text><text class="ts" x="125" y="78" text-anchor="middle">zorunlu</text>
+      <rect class="ta" x="172" y="40" width="88" height="52" rx="5"/><text class="tt" x="216" y="62" text-anchor="middle">UNIT:OP</text><text class="ts" x="216" y="78" text-anchor="middle">18 seçenek</text>
+      <rect class="ta" x="268" y="40" width="70" height="52" rx="5"/><text class="tt" x="303" y="62" text-anchor="middle">ITEM?</text><text class="ts" x="303" y="78" text-anchor="middle">gerekirse</text>
+      <rect class="tb" x="346" y="40" width="88" height="52" rx="5"/><text class="tt" x="390" y="62" text-anchor="middle">END_ACT</text><text class="ts" x="390" y="78" text-anchor="middle">zorunlu</text>
+      <rect class="tb" x="442" y="40" width="70" height="52" rx="5"/><text class="tt" x="477" y="62" text-anchor="middle">HAND</text><text class="ts" x="477" y="78" text-anchor="middle">her işçi</text>
+      <rect class="ta" x="520" y="40" width="70" height="52" rx="5"/><text class="tt" x="555" y="62" text-anchor="middle">…OP</text><text class="ts" x="555" y="78" text-anchor="middle">aynı kafa</text>
+      <rect class="tb" x="598" y="40" width="78" height="52" rx="5"/><text class="tt" x="637" y="62" text-anchor="middle">MARKET</text><text class="ts" x="637" y="78" text-anchor="middle">zorunlu</text>
+      <rect class="ta" x="684" y="40" width="80" height="52" rx="5"/><text class="tt" x="724" y="62" text-anchor="middle">BUY/STOP</text><text class="ts" x="724" y="78" text-anchor="middle">7 seçenek</text>
+      <rect class="tb" x="772" y="40" width="70" height="52" rx="5"/><text class="tt" x="807" y="62" text-anchor="middle">EOS</text>
+      <text class="ts" x="430" y="122" text-anchor="middle"><tspan x="430">BUY_SEED / SELL gibi emirlerde ITEM + QTY (1, 2, 5, 10, ALL) eklenir.</tspan><tspan x="430" dy="18">HIRE ve BUY_LAND argümansızdır. En fazla 10 market emri.</tspan></text>
+    </svg>
+  </div>
+  <p class="cap">Şekil 2. Bir turun token iskeleti. Turuncu kutular stochastic karardır; gri kutular log-prob = 0.</p>
+
+  <table>
+    <tr><th>Kafa</th><th>Token sayısı</th><th>Ne seçer</th></tr>
+    <tr><td>STRUCTURAL</td><td>7</td><td>Ağ logit üretmez; maske tek token açar</td></tr>
+    <tr><td>UNIT_OPERATION</td><td>18</td><td>yürü, PASS, PLANT, WATER, HARVEST, DIG, BUILD, …</td></tr>
+    <tr><td>MARKET_OPERATION</td><td>7</td><td>BUY_SEED/PRODUCT/ANIMAL, SELL, HIRE, BUY_LAND, STOP</td></tr>
+    <tr><td>ITEM</td><td>12</td><td>5 ürün + gübre + 3 hayvansal + 3 hayvan</td></tr>
+    <tr><td>QUANTITY</td><td>5</td><td>1, 2, 5, 10, ALL — <em>50 yok</em></td></tr>
+  </table>
+
+  <h3>Gölge durum</h3>
+  <p>Aynı turda farmer bir kareye ekerse, sonraki hand o kareyi “dolu” görür. Gramer bunu gerçek ortamı oynatmadan bir <em>shadow state</em> üzerinde uygular. Yasal maske: üzerinde durulan kare, envanter, para, mevsim, müfredat filtresi. PASS ve STOP kapatılamaz.</p>
+  <p>Unit sırası: farmer, sonra <code>hands[0], hands[1], …</code>. HIRE edilen el <strong>aynı tur değil, sonraki tur</strong> dizide belirir.</p>
+
+  <h2 id="ag">5. Sinir ağı</h2>
+  <p>Dosya: <code>model.py</code>. Tek ağ, iki çıkış: otoregresif politika ve skaler value. Ağırlık paylaşımı: aynı <code>FarmEncoder</code> hem kendi hem rakip tarlasına uygulanır.</p>
+
+  <div class="fig">
+    <svg id="state-diagram" viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tarla ve global girdilerin state vector ile policy features çıkışlarına bağlantıları">
+      <style>
+        #state-diagram .bb { fill:#26211b; stroke:#3d362c; }
+        #state-diagram .aa { fill:#3a2e1c; stroke:#d4a054; }
+        #state-diagram .tt { fill:#f3eadc; font: 600 12px Georgia, serif; }
+        #state-diagram .ss { fill:#b7aa96; font: 10px ui-monospace, monospace; }
+      </style>
+      <rect class="bb" x="16" y="20" width="150" height="70" rx="6"/>
+      <text class="tt" x="91" y="42" text-anchor="middle">Kendi farm</text>
+      <text class="ss" x="91" y="60" text-anchor="middle">cat 3 + num 26</text>
+      <text class="ss" x="91" y="76" text-anchor="middle">+ 2 işçi kanalı</text>
+      <rect class="bb" x="16" y="130" width="150" height="70" rx="6"/>
+      <text class="tt" x="91" y="152" text-anchor="middle">Rakip farm</text>
+      <text class="ss" x="91" y="170" text-anchor="middle">aynı encoder</text>
+      <text class="ss" x="91" y="186" text-anchor="middle">ağırlık ortak</text>
+      <rect class="bb" x="16" y="240" width="150" height="56" rx="6"/>
+      <text class="tt" x="91" y="262" text-anchor="middle">Global 62-d</text>
+      <text class="ss" x="91" y="280" text-anchor="middle">Linear-LN-GELU-Tanh</text>
+
+      <path class="ll" d="M166 55 H210"/>
+      <path class="ll" d="M166 165 H210"/>
+      <path class="ll" d="M166 268 H210"/>
+      <rect class="aa" x="210" y="16" width="170" height="78" rx="6"/>
+      <text class="tt" x="295" y="40" text-anchor="middle">FarmEncoder</text>
+      <text class="ss" x="295" y="58" text-anchor="middle">1×1 tile → 32</text>
+      <text class="ss" x="295" y="74" text-anchor="middle">3×3 residual → 64</text>
+      <text class="ss" x="295" y="88" text-anchor="middle">own_map 64×10×10</text>
+      <rect class="aa" x="210" y="126" width="170" height="78" rx="6"/>
+      <text class="tt" x="295" y="150" text-anchor="middle">FarmEncoder</text>
+      <text class="ss" x="295" y="168" text-anchor="middle">aynı ağırlık</text>
+      <text class="ss" x="295" y="184" text-anchor="middle">opp_map 64×10×10</text>
+      <rect class="bb" x="210" y="240" width="170" height="56" rx="6"/>
+      <text class="tt" x="295" y="262" text-anchor="middle">GlobalEncoder</text>
+      <text class="ss" x="295" y="280" text-anchor="middle">62 → 128 → 64 Tanh</text>
+
+      <path class="ll" d="M380 55 H424"/>
+      <path class="ll" d="M380 165 H424"/>
+      <path class="ll" d="M380 268 H424"/>
+      <rect class="bb" x="424" y="20" width="150" height="70" rx="6"/>
+      <text class="tt" x="499" y="44" text-anchor="middle">FarmPooling</text>
+      <text class="ss" x="499" y="62" text-anchor="middle">avg ∥ max → 64</text>
+      <text class="ss" x="499" y="78" text-anchor="middle">own_summary</text>
+      <rect class="bb" x="424" y="130" width="150" height="70" rx="6"/>
+      <text class="tt" x="499" y="154" text-anchor="middle">FarmPooling</text>
+      <text class="ss" x="499" y="172" text-anchor="middle">opp_summary</text>
+      <text class="ss" x="499" y="188" text-anchor="middle">− = comparison</text>
+      <rect class="bb" x="424" y="240" width="150" height="56" rx="6"/>
+      <text class="tt" x="499" y="262" text-anchor="middle">global_summary</text>
+      <text class="ss" x="499" y="280" text-anchor="middle">64-d işaretli</text>
+
+      <!-- Solid summary bus feeds state_vector. Dots mark actual junctions. -->
+      <path d="M574 55 H598 V268 H574 M574 165 H598" fill="none" stroke="#b7aa96" stroke-width="1.6"/>
+      <path class="ll" d="M598 105 H620"/>
+      <g fill="#b7aa96"><circle cx="598" cy="105" r="3"/><circle cx="598" cy="165" r="3"/></g>
+      <!-- Own spatial map bypasses pooling; dashed links carry broadcast summaries. -->
+      <path class="ll" d="M295 16 V4 H852 V324 H730 V240"/>
+      <text class="ss" x="535" y="343" text-anchor="middle">own_map · pooling öncesi spatial bağlantı</text>
+      <path class="ll" d="M574 165 H586 V205 H620" stroke-dasharray="4 3"/>
+      <path class="ll" d="M574 280 H610 V225 H620" stroke-dasharray="4 3"/>
+      <rect class="aa" x="620" y="70" width="220" height="70" rx="6"/>
+      <text class="tt" x="730" y="94" text-anchor="middle">state_vector 256</text>
+      <text class="ss" x="730" y="112" text-anchor="middle">own ∥ opp ∥ (own−opp) ∥ g</text>
+      <text class="ss" x="730" y="128" text-anchor="middle">→ decoder + value</text>
+      <rect class="aa" x="620" y="170" width="220" height="70" rx="6"/>
+      <text class="tt" x="730" y="194" text-anchor="middle">policy_features 192</text>
+      <text class="ss" x="730" y="212" text-anchor="middle">own_map + yayın opp + g</text>
+      <text class="ss" x="730" y="228" text-anchor="middle">opp_map buraya girmez</text>
+    </svg>
+  </div>
+  <p class="cap">Şekil 3. StateEncoder. Policy haritası rakibin 10×10’unu değil, rakibin 64-d özetini her kareye yayınlar.</p>
+
+  <h3 id="ag-tile">5.1 TileEncoder ve SpatialEncoder</h3>
+  <ol>
+    <li>Embedding + numeric birleşir → 37 kanal.</li>
+    <li><code>Conv2d 1×1</code> + ReLU → 32 kanal. Komşu henüz karışmaz; her kare kendi evinde pişer.</li>
+    <li>İşçi 2 kanal eklenir → 34. <code>farm_mixer</code> 1×1 → 32.</li>
+    <li><code>SpatialEncoder</code>: 3×3 stem (GroupNorm 8, ReLU) → 2 residual blok (her biri iki 3×3, GroupNorm, artık bağ + ReLU) → 1×1 projeksiyon 64. Beş adet 3×3, alıcı alanı <strong>11×11</strong> yapar; 10×10 tarlayı kapsar.</li>
+  </ol>
+  <p>Eski sürümde tek geniş kernel vardı; checkpoint formatı v2 bu yığın içindir. v1 ağırlıklar yüklenemez.</p>
+  <p><code>FarmPooling</code>: her kanalın 10×10 ortalaması ve maksimumu (128-d) → Linear + ReLU → 64.</p>
+  <p><code>GlobalEncoder</code> çıkışı Tanh: işaret korunur, aralık [−1, 1]. ReLU negatif market/para farkını öldürmesin diye.</p>
+
+  <h3 id="ag-state">5.2 İki temsil</h3>
+  <table>
+    <tr><th>Tensör</th><th>Şekil</th><th>Kim kullanır</th></tr>
+    <tr><td><code>state_vector</code></td><td>(B, 256)</td><td>GRU’ya her adımda eklenir; value head</td></tr>
+    <tr><td><code>policy_features</code></td><td>(B, 192, 10, 10)</td><td>UnitContextEncoder: o karenin 192-d’si + unit envanteri → 128</td></tr>
+    <tr><td><code>opponent_map</code></td><td>(B, 64, 10, 10)</td><td>Yalnız özet için; decoder görmez</td></tr>
+  </table>
+  <p>Unit context: geçerli (y, x) gather. Padding unit’ler (0,0)’a yönlendirilir sonra maske ile sıfırlanır. Farmer ve her hand kendi 128-d bağlamını taşır.</p>
+
+  <h3 id="ag-decoder">5.3 Otoregresif decoder</h3>
+  <p><code>AutoregressiveActionDecoder</code>: token embedding 49×128 + state projeksiyonu 256→128 (her adımda yayın) + o adımın unit bağlamı 128→128. Toplam LayerNorm → GRU (1 katman, hidden 128) → <code>CategorizedActionHeads</code>.</p>
+  <p>Dört öğrenilebilir kafa, her biri kendi küçük logit vektörünü 49’luk global arayüze scatter eder. Yanlış kafanın kolonları 0 kalır. STRUCTURAL satırda tüm logit 0’dır; maske tek token açtığı için log π = 0.</p>
+  <p>Teacher forcing: <code>input_token_ids[:, t]</code> bir önceki tokendir; aynı satırdaki <code>context_unit_indices</code> <em>tahmin edilecek</em> tokenın birimine aittir. Market adımlarında unit index −1, unit terimi 0.</p>
+
+  <h3>5.4 Value</h3>
+  <p><code>StateValueHead</code>: 256 → 128 Tanh → 1. Tek skaler, global. Dört rol value head’i <em>yoktur</em> (plândaki v1 kararı).</p>
+
+  <table>
+    <tr><th>Modül</th><th>Parametre</th></tr>
+    <tr><td>FarmEncoder (ortak)</td><td>50&nbsp;972 — Spatial 48&nbsp;576</td></tr>
+    <tr><td>FarmPooling</td><td>8&nbsp;256</td></tr>
+    <tr><td>GlobalEncoder</td><td>16&nbsp;576</td></tr>
+    <tr><td>StateEncoder toplam</td><td>75&nbsp;804</td></tr>
+    <tr><td>UnitContextEncoder</td><td>26&nbsp;624</td></tr>
+    <tr><td>Action decoder + kafalar</td><td>160&nbsp;426</td></tr>
+    <tr><td>Value head</td><td>33&nbsp;025</td></tr>
+    <tr><td><strong>Toplam</strong></td><td><strong>295&nbsp;879</strong></td></tr>
+  </table>
+
+  <h2 id="ornekleme">6. Aksiyon nasıl çekilir?</h2>
+  <p><code>policy.sample_action</code>, <code>torch.no_grad</code> ile:</p>
+  <ol>
+    <li>Observation encode.</li>
+    <li>State + unit context + V(s) bir kez.</li>
+    <li>Gramere BOS basılır. Döngü: maske, kafa tipi, unit index → decoder bir adım → geçersiz logit −∞ → softmax.</li>
+    <li>Maskede tek token varsa karar değildir: log-prob 0, entropy 0, o token alınır.</li>
+    <li>Birden fazla varsa stochastic: <code>multinomial</code> (veya eval’de argmax). Entropy yalnız açık seçenekler üzerinden.</li>
+    <li>EOS’a kadar. <code>action_log_prob</code> = tüm token log-prob toplamı (zorunlular 0).</li>
+  </ol>
+  <p>PPO hedef dizisi <code>token_ids[1:]</code> yani <code>target_token_ids</code>. Span indeksleri BOS’lu tam dizidendir; kredi yazılırken 1 eksiltilir.</p>
+
+  <h2 id="odul">7. Ödül — iki defter</h2>
+  <p>İkisi <em>toplanmaz</em>. Skor defteri tur skaleridir. İş defteri episode sonunda span notudur.</p>
+
+  <div class="fig">
+    <svg id="reward-diagram" viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sezon sonundan skor defterine ve span kredi defterine ayrı dallar">
+      <style>
+        #reward-diagram .bx { fill:#26211b; stroke:#3d362c; }
+        #reward-diagram .ax { fill:#3a2e1c; stroke:#d4a054; }
+        #reward-diagram .tx { fill:#f3eadc; font: 600 13px Georgia, serif; }
+        #reward-diagram .sx { fill:#b7aa96; font: 11px ui-monospace, monospace; }
+      </style>
+      <rect class="bx" x="30" y="16" width="200" height="50" rx="6"/>
+      <text class="tx" x="130" y="46" text-anchor="middle">720 tur oynandı</text>
+      <path class="lx" d="M230 41 H280"/>
+      <rect class="bx" x="280" y="16" width="200" height="50" rx="6"/>
+      <text class="tx" x="380" y="46" text-anchor="middle">Sezon bitti</text>
+      <path class="lx" d="M380 66 V88 H210 V110"/>
+      <path class="lx" d="M380 66 V88 H630 V110"/>
+      <circle cx="380" cy="88" r="3" fill="#b7aa96"/>
+      <rect class="bx" x="30" y="110" width="360" height="110" rx="6"/>
+      <text class="tx" x="210" y="136" text-anchor="middle">Skor defteri  ·  r_t</text>
+      <text class="sx" x="210" y="158" text-anchor="middle">719 tur: 0</text>
+      <text class="sx" x="210" y="176" text-anchor="middle">son tur: (biz − rakip) / 3000</text>
+      <text class="sx" x="210" y="194" text-anchor="middle">β=0 ⇒ shaping yok</text>
+      <text class="sx" x="210" y="212" text-anchor="middle">critic GAE  ·  actor’a gitmez</text>
+      <rect class="ax" x="430" y="110" width="400" height="110" rx="6"/>
+      <text class="tx" x="630" y="136" text-anchor="middle">İş defteri  ·  span kredisi</text>
+      <text class="sx" x="630" y="158" text-anchor="middle">toplam = satış − hammadde − HIRE</text>
+      <text class="sx" x="630" y="176" text-anchor="middle">PURCHASE / FARM / TRADE / HIRE</text>
+      <text class="sx" x="630" y="194" text-anchor="middle">r_t’ye eklenmez</text>
+      <text class="sx" x="630" y="212" text-anchor="middle">actor’un asıl öğretmeni</text>
+    </svg>
+  </div>
+  <p class="cap">Şekil 4. span_v1’de actor iş defterini, critic skor defterini öğrenir.</p>
+
+  <h3 id="odul-skor">7.1 Skor defteri (<code>reward.py</code>)</h3>
+  <p>Her geçiş:</p>
+  <div class="eq">base<sub>t</sub> = 0  (oyun bitmediyse)<br/>
+base<sub>T</sub> = (own_gold − opponent_gold) / reward_scale<br/>
+shaping<sub>t</sub> = β · (γ Φ(s′) − Φ(s))<br/>
+r<sub>t</sub> = base + shaping + lifecycle_step</div>
+  <p><code>reward_scale = 3000</code>. Biz 4200, rakip 3600 ise base = 0.20. <code>economic_span</code> iken <code>assign()</code> boş döner: <code>lifecycle_step = 0</code>. CLI <code>β ≠ 0</code> kabul etmez. Dolayısıyla span_v1’de r dizisi 719 sıfır + bir terminal skalerdir.</p>
+  <p>Terminalde Φ(s′) = 0 konur. β&gt;0 olsaydı shaping episode boyunca teleskoplanır, optimal politikayı değiştirmezdi; yalnızca krediyi adımlara yayardı. HIRE maliyeti o zaman hem Φ’de hem iş defterinde görünürdü — bu yüzden v1’de β kilitli 0.</p>
+
+  <h3 id="odul-phi">7.2 Potential Φ (kapalı, ama hâlâ hesaplanır)</h3>
+  <p>Log ve eski deneyler için Φ her adımda yazılır:</p>
+  <div class="eq">Φ(s) = (nakit + likit ürün + ekilebilir tohum + yerleştirilmemiş hayvan<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ büyüyen bitki + yerleştirilmiş hayvan − 3000) / 3000</div>
+  <ul>
+    <li><strong>Nakit:</strong> kasa.</li>
+    <li><strong>Likit ürün:</strong> shed + cepler, motorun SELL eğrisiyle birer birer tasfiye tahmini. Fiyat 1$ ise stok artmaz (motor kuralı).</li>
+    <li><strong>Tohum:</strong> ilk hasada sezon yetişmiyorsa 0; yetişiyorsa adet × tohum maliyeti (muhafazakâr yerine koyma).</li>
+    <li><strong>Yerleştirilmemiş hayvan:</strong> aynı mantık, satın alma maliyeti.</li>
+    <li><strong>Tek seferlik bitki:</strong> gübresiz tavan, kalan gün, marjinal fiyat, γ<sup>gün×24</sup>.</li>
+    <li><strong>Sürekli bitki:</strong> birikmiş birim + gelecekteki üretim günleri (gübreli 2, değilse 1).</li>
+    <li><strong>Hayvan tile:</strong> benzer verim + yem/bakım.</li>
+  </ul>
+  <p>Φ’de <em>yok:</em> işçi sayısı, bina, boş toprak, kilitli kare. DIG nakit düşürür (Φ−); PLANT nakit/tohum → büyüyen değere döner (genelde Φ+); HARVEST/SELL stok biçimini değiştirir, net Φ çoğu zaman ~0.</p>
+
+  <h3 id="odul-span">7.3 İş defteri — economic span şema 4</h3>
+  <p>Dosyalar: <code>span_credit.py</code>, <code>lifecycle_tracking.py</code>, <code>market_execution.py</code>. Episode bitince event journal okunur. Yerel kredi <strong>r_t’ye yazılmaz</strong>.</p>
+  <p>Tek invariant:</p>
+  <div class="eq">Σ yerel kredi = (satış geliri − tohum maliyeti − alınan ürün maliyeti − HIRE ücreti) / 3000</div>
+  <p>Sapma &gt; 1e−7 ise eğitim <code>RuntimeError</code> ile durur. İlk span_v1 episode’larında hata 0.0 ölçüldü.</p>
+
+  <h4>Tarla (FARM + PURCHASE)</h4>
+  <p>Her <em>satılan</em> bitki için:</p>
+  <div class="eq">chain_net = (o bitkinin satış geliri − bir tohum maliyeti) / 3000<br/>
+eşit pay = chain_net / (zincirdeki span sayısı)</div>
+  <p>Zincir: o bitkinin BUY_SEED (span varsa), PLANT, WATER, FERTILIZE, HARVEST, shed’e DROP/PLACE, SELL. Paylar eşit. BUY_SEED payının rolü <strong>PURCHASE</strong>; geri kalanı <strong>FARM</strong>.</p>
+  <p>Satılmayan ekim/sulama <strong>0</strong>. Kullanılmayan tohum:</p>
+  <div class="eq">unused = −(satılmayan adet × birim maliyet) / 3000   → yalnız BUY_SEED, rol PURCHASE</div>
+
+  <div class="note">
+    <strong>50 al, 1 sat ($51), tohum $10.</strong>
+    Satılan zincir +41 / 3000, eşit bölünür. 49 çöp −490 / 3000 yalnız alışta.
+    Toplam −449 / 3000 = (51 − 500) / 3000. Satış iki kez sayılmaz.
+  </div>
+
+  <h4>Ticaret (TRADE)</h4>
+  <p>BUY_PRODUCT lotu FIFO ile satışlara bağlanır. Her allocation:</p>
+  <div class="eq">net = (realized_revenue − allocated_cost) / 3000<br/>pay = net / (alış ve satış span’ı varsa 2, tek tarafta 1)</div>
+  <p>Satılmayan kalan maliyet yalnız alış span’ına eksi gider. Saf tarla satışının <code>source_purchase_id</code>’si yoktur; TRADE yazılmaz.</p>
+
+  <h4>İşçi (HIRE)</h4>
+  <p>Gerçekleşen ücret: <code>−cost / 3000</code>, yalnız o HIRE span’ı. İşçinin sonraki hasadı HIRE’a transfer edilmez (v1). Başarısız ama ücret kesilmiş HIRE de eksi alır.</p>
+
+  <h4>Aynı SELL, tek PPO terimi</h4>
+  <p>Bir SELL hem hasat hem alınan ürün satabilir. Attribution satırları ayrı kalır; <code>aggregate_training_credits</code> aynı <code>action_id</code> tutarını toplar. Role etiketi, mutlak toplamı en büyük kovadır; eşitlikte enum sırası (PURCHASE &lt; FARM &lt; TRADE &lt; HIRE).</p>
+  <p>Stochastic tokenu olmayan span actor loss’a girmez; kayıt audit için durur. 3 tokenlık alış ile 1 tokenlık HIRE aynı ekonomik ağırlığı paylaşır — token uzunluğu çarpan değildir.</p>
+
+  <h4>Ölçek: RunningRoleRMS v2</h4>
+  <p>Rol başına <code>sqrt(ortalama kare)</code>. İşaret değişmez, merkezlenmez. PURCHASE karesi FARM’dan büyük kalabilir; kovalar karışmaz. Checkpoint state version 2 zorunlu; long_v6 RMS’i yüklenemez.</p>
+
+  <table>
+    <tr><th>Kova</th><th>Kim</th><th>Tipik işaret</th></tr>
+    <tr><td>PURCHASE</td><td>BUY_SEED payı + unused</td><td>israf varsa güçlü eksi</td></tr>
+    <tr><td>FARM</td><td>PLANT … SELL (bitki)</td><td>satış olursa artı</td></tr>
+    <tr><td>TRADE</td><td>BUY_PRODUCT ↔ SELL</td><td>arbitraj neti</td></tr>
+    <tr><td>HIRE</td><td>HIRE</td><td>hep eksi (v1)</td></tr>
+  </table>
+
+  <h3 id="odul-eski">7.4 Diğer lifecycle modları (şu an kapalı)</h3>
+  <table>
+    <tr><th>Mod</th><th>r_t’ye yazar mı</th><th>Ne yapar</th></tr>
+    <tr><td><code>off</code></td><td>hayır</td><td>Yalnız base + shaping</td></tr>
+    <tr><td><code>harvest_value</code></td><td>evet</td><td>Hasat anı ürün×fiyat / 3000, hedefi bozar, çift sayım riski</td></tr>
+    <tr><td><code>causal_chain</code> şema 2</td><td>hayır</td><td>Token kredisi: alış = satış−tam sipariş <em>ve</em> bitki = satış−1 tohum. Satış iki kez. long_v6 bu yolda.</td></tr>
+    <tr><td><code>economic_span</code> şema 4</td><td>hayır</td><td>Yukarıdaki korunumlu span. span_v1.</td></tr>
+  </table>
+  <p>Şema 2’de 50 al / 1 sat: alış −449, bitki +41; toplam −408 ≠ −449. “Alış israfı” alış tokenını ezer, ajan almayı bırakır. Şema 4 bunu tam da bu yüzden kaldırdı.</p>
+
+  <h2 id="tracker">8. Yaşam döngüsü tracker</h2>
+  <p>Motor nesne kimliği vermez; buğdaylar sayaçta erir. <code>FarmLifecycleTracker</code> sentetik lot / bitki id üretir, satışları FIFO bağlar. Event türleri: INITIAL_SEED_LOT, SEED_PURCHASED, PLANTED, WATERED, FERTILIZED, HARVESTED, PLANT_LOST, PRODUCT_PURCHASED, PRODUCT_MOVED, PRODUCT_SOLD, HIRED, INVENTORY_RECONCILED.</p>
+  <p>Market emirleri ortamdan önce <code>trace_market_executions</code> ile simüle edilir ki fiyat/maliyet event’e yazılsın. Her event mümkünse o turun token span’ına (unit i veya market j) bağlanır. Token span BOS’lu diziyi indeksler.</p>
+  <p>Müfredatın verdiği 8 buğday tohumu <code>INITIAL_SEED_LOT</code> olur; satın alınmadığı için unused cezası yoktur, ekilip satılırsa zincirde alış span’ı olmayabilir.</p>
+
+  <h2 id="ppo">9. PPO nasıl yer?</h2>
+  <p>Dosyalar: <code>ppo.py</code>, <code>training.py</code>.</p>
+
+  <h3>9.1 GAE (critic)</h3>
+  <div class="eq">δ<sub>t</sub> = r<sub>t</sub> + γ V(s<sub>t+1</sub>) (1−d<sub>t</sub>) − V(s<sub>t</sub>)<br/>
+A<sub>t</sub> = δ<sub>t</sub> + γλ (1−d<sub>t</sub>) A<sub>t+1</sub><br/>
+R<sub>t</sub> = A<sub>t</sub> + V(s<sub>t</sub>)</div>
+  <p>γ = 0.999, λ = 0.95. λ = 1 olsaydı 720 sıfır + bir terminal, tüm turlar neredeyse aynı avantajı alırdı (episode-REINFORCE). β = 0 iken r seyrek olduğu için A_t hâlâ terminal ağırlıklıdır; critic bunu öğrenir. <code>global_actor_coef = 0</code> olduğu için bu A_t politika kaybına çarpılmaz.</p>
+  <p>Value loss: clipped value, 0.5 × max(MSE, clipped MSE). <code>value_coef = 0.5</code>.</p>
+
+  <h3>9.2 Yerel span actor</h3>
+  <p>Her kredili span için eski log π (o span’daki stochastic tokenların toplamı) saklanır. Yeni log π aynı şekilde. Rol gruplu clipped PPO:</p>
+  <div class="eq">ratio = exp(new − old)<br/>
+L_role = −mean min(ratio · scaled_credit, clip(ratio) · scaled_credit)<br/>
+L_local = Σ<sub>rol</sub> w_rol L_rol &nbsp;/&nbsp; Σ w</div>
+  <p>Avantaj burada GAE değil, RMS ölçekli span kredisidir. Varsayılan ağırlık (1,1,1,1). Early-stop, rol KL’leri ve kafa KL’lerinin <em>maksimumuna</em> bakar; joint token sayısıyla şişen tek KL kullanılmaz.</p>
+
+  <h3>9.3 Global span (kapalı)</h3>
+  <p><code>use_action_span_policy</code> açıkken global terim de hesaplanır: her semantik emrin log π’si, GAE A_t ile, UNIT/MARKET dengeli. <code>global_actor_coef = 0</code> bunu çarparak sıfırlar. Factorized surrogate, tam joint log π(a|s) değildir; ablation’sız açılmasın diye 0’da durur.</p>
+
+  <h3>9.4 Entropy</h3>
+  <p>Yalnız stochastic tokenlar. <code>head_balanced_entropy</code> (economic_span): önce kafa içi ortalama, sonra aktif kafalar arasında ağırlıklı ortalama. span_v1 ağırlıkları STRUCTURAL=1 (etkisiz), UNIT=1, MARKET=4, ITEM=1, QTY=2 — marketin erken çökmesini geciktirmek için.</p>
+  <p>Katsayı müfredata göre: loop 0.045, hire 0.040, land 0.032, carrot 0.025, full 0.020→0.008 (4000 episode). Loss:</p>
+  <div class="eq">L = c_global · L_global + c_span · L_local + c_v · L_value − c_H · H</div>
+  <p>span_v1: c_global=0, c_span=1, c_v=0.5, c_H aşamaya göre.</p>
+
+  <h3>9.5 Update hijyeni</h3>
+  <ul>
+    <li>16 episode / update, 3 epoch, minibatch 256, lr 1e−4, clip 0.2, grad clip 1.0</li>
+    <li>Minibatch KL &gt; 2 × 0.015 ise o minibatch atlanır</li>
+    <li>Epoch ortalama KL &gt; 0.015 ise update durur (KL-STOP)</li>
+    <li>Avantajlar (global) normalize edilir; span tarafında RMS scale-only</li>
+  </ul>
+  <div class="note warn">İlk span_v1 update’lerinin üçü de 1/3 epoch’ta KL-STOP oldu. Purchase / market KL eşiği çekiyor. Bu, alışın henüz rastgele ve cezasının büyük olmasından beklenen bir gürültüdür; kalıcı olursa market çöker.</div>
+
+  <h2 id="mufredat">10. Müfredat ve keşif</h2>
+  <p>Yasal gramer her zaman geçerli. Müfredat onun üstüne kapatır. PASS/STOP kapanmaz.</p>
+  <table>
+    <tr><th>Aşama</th><th>span_v1 episode</th><th>Açık olan</th></tr>
+    <tr><td>wheat_loop</td><td>1–2000</td><td>yürü, PLANT/WATER/HARVEST/DROP, BUY_SEED, SELL, yalnız WHEAT</td></tr>
+    <tr><td>wheat_hire</td><td>2001–4000</td><td>+ HIRE</td></tr>
+    <tr><td>wheat_land</td><td>4001–6000</td><td>+ BUY_LAND</td></tr>
+    <tr><td>wheat_carrot</td><td>6001–8000</td><td>+ CARROT</td></tr>
+    <tr><td>full</td><td>8001–10000</td><td>her yasal emir (DIG, BUILD, hayvan, …)</td></tr>
+  </table>
+  <p>İlk aşamalarda 8 buğday tohumu depoya eklenir; <code>full</code>’da hediye kesilir. span_v1 <code>probe_probability = 0</code>: erken DIG sızmaz. long_v6’da probe 0.25 idi; maskeli aşamada bile ara sıra tam yasal maske açılıyordu.</p>
+  <p>β=0 iken DIG/BUILD iş defterinde yoktur. <code>full</code>’da bu emirler yalnız critic’in seyrek terminal sinyalini görür — ilk koşunun 4000 episode maskede kalmasının nedeni budur.</p>
+
+  <h2 id="egitim">11. Bir eğitim turunun tam sırası</h2>
+  <ol>
+    <li>Episode seed, taraf (0/1 nöbetleşe), müfredat aşaması, entropy katsayısı.</li>
+    <li>Ortam + starter rakip. İsteğe bağlı başlangıç tohumu.</li>
+    <li>Her adım: encode → sample (maskeli) → rakip → (span modunda market simülasyonu) → <code>env.step</code> → tracker event → r_t (span’da yalnızca base) → rollout satırı + action span kayıtları.</li>
+    <li>Bitti: causal_chain ise token kredisi (span’da boş); economic_span ise span assignment + aggregate + invariant. Audit JSON’ları yazılır.</li>
+    <li>16 episode birikince RunningRoleRMS güncellenir, PPO, checkpoint.</li>
+  </ol>
+  <p>Artifact: <code>summary.json</code>, <code>action_spans.json</code>, <code>span_credit_assignments.json</code>, <code>span_training_credits.json</code>, lifecycle dosyaları, seyrek replay/trace. Resume, <code>training_semantics_version = 4</code> ve RMS v2 ister.</p>
+
+  <div class="fig">
+    <svg id="update-diagram" viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PPO update bileşenleri, eski span_v1 anlatımı">
+      <style>
+        #update-diagram .c { fill:#26211b; stroke:#3d362c; }
+        #update-diagram .d { fill:#3a2e1c; stroke:#d4a054; }
+        #update-diagram .t { fill:#f3eadc; font: 600 12px Georgia, serif; }
+        #update-diagram .s { fill:#b7aa96; font: 10px ui-monospace, monospace; }
+      </style>
+      <rect class="c" x="10" y="30" width="120" height="58" rx="5"/><text class="t" x="70" y="54" text-anchor="middle">collect</text><text class="s" x="70" y="72" text-anchor="middle">16 × 720 tur</text>
+      <rect class="c" x="150" y="30" width="130" height="58" rx="5"/><text class="t" x="215" y="54" text-anchor="middle">GAE</text><text class="s" x="215" y="72" text-anchor="middle">r = terminal skor</text>
+      <rect class="d" x="300" y="30" width="150" height="58" rx="5"/><text class="t" x="375" y="54" text-anchor="middle">span kredisi</text><text class="s" x="375" y="72" text-anchor="middle">RMS × rol PPO</text>
+      <rect class="c" x="470" y="30" width="140" height="58" rx="5"/><text class="t" x="540" y="54" text-anchor="middle">value + H</text><text class="s" x="540" y="72" text-anchor="middle">critic ve keşif</text>
+      <rect class="c" x="630" y="30" width="210" height="58" rx="5"/><text class="t" x="735" y="54" text-anchor="middle">Adam 1e−4</text><text class="s" x="735" y="72" text-anchor="middle">KL skip / stop</text>
+      <text class="s" x="430" y="120" text-anchor="middle">global_actor_coef = 0  ⇒  ortadaki kutu politikayı iter, soldaki GAE yalnızca V(s) içindir</text>
+      <text class="s" x="430" y="150" text-anchor="middle">Bir episode ≈ tek bağımsız örnek. 16’lık paket varyansı düşürür.</text>
+    </svg>
+  </div>
+  <p class="cap">Şekil 5. Bir PPO update’inin semantiği.</p>
+
+  <h2 id="kosular">12. İki koşu, iki semantik</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>span_v1 (yeni)</h3>
+      <p><code>economic_span</code> v4 · β=0 · global actor 0 · probe 0 · 10k episode · 2000/aşama. Actor iş defteri. long_v6’dan resume yok.</p>
+    </div>
+    <div class="card">
+      <h3>long_v6 (eski, hâlâ açık)</h3>
+      <p><code>causal_chain</code> şema 2 · β=0.25 · probe 0.25. Token split-credit + shaping. Satış çift sayılabilir; alış israfı “hiç alma”ya itebilir.</p>
+    </div>
+  </div>
+
+  <p>İlgili dosyalar: <code>model.py</code>, <code>policy.py</code>, <code>action_encoding.py</code>, <code>observation_encoding.py</code>, <code>tile_encoding.py</code>, <code>global_encoding.py</code>, <code>reward.py</code>, <code>span_credit.py</code>, <code>lifecycle_credit.py</code>, <code>lifecycle_tracking.py</code>, <code>ppo.py</code>, <code>training.py</code>, <code>scripted_training.py</code>, <code>train_scripted.py</code>, <code>curriculum.py</code>, <code>entropy_schedule.py</code>, <code>ACTION_CREDIT_PLAN.md</code>.</p>
+
+  <footer>Anlatım kodun 2026-08-30 hâline göre yazıldı. TRAINING.md içindeki varsayılan β=0.25 / causal_chain satırları eski komut örnekleridir; CLI varsayılanı artık economic_span ve β=0.</footer>
+</main>
+</div>
+</body>
+</html>

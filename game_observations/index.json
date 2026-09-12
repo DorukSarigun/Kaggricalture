@@ -1,0 +1,117 @@
+{
+  "environment": "kaggriculture",
+  "configuration": {
+    "episodeSteps": 720
+  },
+  "agents": [
+    "random",
+    "random"
+  ],
+  "games": [
+    {
+      "game": 1,
+      "seed": 101,
+      "file": "game_01_seed_101.json",
+      "recorded_steps": 720,
+      "file_size_bytes": 15332435,
+      "final": [
+        {
+          "player_id": 0,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        },
+        {
+          "player_id": 1,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        }
+      ]
+    },
+    {
+      "game": 2,
+      "seed": 202,
+      "file": "game_02_seed_202.json",
+      "recorded_steps": 720,
+      "file_size_bytes": 15373516,
+      "final": [
+        {
+          "player_id": 0,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        },
+        {
+          "player_id": 1,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        }
+      ]
+    },
+    {
+      "game": 3,
+      "seed": 303,
+      "file": "game_03_seed_303.json",
+      "recorded_steps": 720,
+      "file_size_bytes": 15267639,
+      "final": [
+        {
+          "player_id": 0,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        },
+        {
+          "player_id": 1,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        }
+      ]
+    },
+    {
+      "game": 4,
+      "seed": 404,
+      "file": "game_04_seed_404.json",
+      "recorded_steps": 720,
+      "file_size_bytes": 15237883,
+      "final": [
+        {
+          "player_id": 0,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        },
+        {
+          "player_id": 1,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        }
+      ]
+    },
+    {
+      "game": 5,
+      "seed": 505,
+      "file": "game_05_seed_505.json",
+      "recorded_steps": 720,
+      "file_size_bytes": 15023469,
+      "final": [
+        {
+          "player_id": 0,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        },
+        {
+          "player_id": 1,
+          "reward": 0.0,
+          "status": "DONE",
+          "money": 0.0
+        }
+      ]
+    }
+  ]
+}

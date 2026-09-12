@@ -1,0 +1,906 @@
+{
+  "summary": {
+    "numeric_channels": 26,
+    "dynamic_channels": 12,
+    "static_channels": 14,
+    "global_features": 62,
+    "synthetic_checks": "15/15",
+    "global_checks": "8/8",
+    "saved_parse_failures": 0,
+    "saved_nans": 0,
+    "network_params": 50748,
+    "forward_ms": 3.523,
+    "missing_critical": 3,
+    "missing_high": 4
+  },
+  "synthetic": {
+    "numeric": {
+      "empty": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "locked": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "weed": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "wheat_new": [
+        0.0,
+        0.0,
+        0.5,
+        0.1666666716337204,
+        0.5,
+        1.0,
+        0.1666666716337204,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.019999999552965164,
+        0.10000000149011612,
+        0.20000000298023224,
+        1.0,
+        0.25,
+        0.0,
+        0.0,
+        1.0,
+        0.6666666865348816,
+        1.0,
+        0.0,
+        0.800000011920929
+      ],
+      "wheat_ready": [
+        0.13333334028720856,
+        1.0,
+        0.0,
+        0.6666666865348816,
+        0.5,
+        1.0,
+        0.02777777798473835,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.019999999552965164,
+        0.10000000149011612,
+        0.20000000298023224,
+        1.0,
+        0.25,
+        0.0,
+        0.0,
+        1.0,
+        0.6666666865348816,
+        1.0,
+        0.0,
+        0.800000011920929
+      ],
+      "melon": [
+        0.3333333432674408,
+        1.0,
+        0.0,
+        1.0,
+        0.5,
+        1.0,
+        0.10000000149011612,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.1599999964237213,
+        1.0,
+        1.0,
+        1.0,
+        0.625,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.550000011920929
+      ],
+      "empty_coop": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "goose": [
+        0.13333334028720856,
+        1.0,
+        0.0,
+        0.5,
+        0.5,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.6666666865348816,
+        1.0,
+        1.0,
+        1.0,
+        0.6000000238418579,
+        0.20000000298023224,
+        0.4000000059604645,
+        0.0,
+        0.0,
+        0.3333333432674408,
+        0.0,
+        0.6666666865348816,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "cow": [
+        0.06666667014360428,
+        0.0,
+        0.5,
+        1.0,
+        0.5,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        0.800000011920929,
+        0.6399999856948853,
+        0.800000011920929,
+        0.0,
+        0.0,
+        0.6666666865348816,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        0.5
+      ]
+    },
+    "ids": {
+      "empty": [
+        0,
+        0,
+        0
+      ],
+      "locked": [
+        1,
+        0,
+        0
+      ],
+      "weed": [
+        2,
+        0,
+        0
+      ],
+      "wheat_new": [
+        3,
+        1,
+        0
+      ],
+      "melon": [
+        3,
+        5,
+        0
+      ],
+      "empty_coop": [
+        4,
+        0,
+        0
+      ],
+      "goose": [
+        4,
+        0,
+        1
+      ],
+      "cow": [
+        5,
+        0,
+        2
+      ]
+    },
+    "checks": [
+      {
+        "name": "kind_ids_unique",
+        "ok": true,
+        "detail": "empty/locked/weed ids={'empty': [0, 0, 0], 'locked': [1, 0, 0], 'weed': [2, 0, 0]}"
+      },
+      {
+        "name": "empty_numeric_zero",
+        "ok": true,
+        "detail": "nonzero=0"
+      },
+      {
+        "name": "new_wheat_neglect_half",
+        "ok": true,
+        "detail": "neglect=0.5"
+      },
+      {
+        "name": "new_wheat_must_water_same_day",
+        "ok": true,
+        "detail": "planting day counts as first missed water"
+      },
+      {
+        "name": "wheat_yield_fill_unfertilized_peak",
+        "ok": true,
+        "detail": "fill=0.6666666865348816"
+      },
+      {
+        "name": "wheat_vs_melon_static_differs",
+        "ok": true,
+        "detail": "static type channels should differ by crop"
+      },
+      {
+        "name": "price_at_base_is_half",
+        "ok": true,
+        "detail": "p/(p+base) at equilibrium"
+      },
+      {
+        "name": "empty_coop_not_occupied",
+        "ok": true,
+        "detail": "empty coop has no animal"
+      },
+      {
+        "name": "goose_occupied_and_cared",
+        "ok": true,
+        "detail": "goose care bank encoded"
+      },
+      {
+        "name": "cow_max_held_fill",
+        "ok": true,
+        "detail": "cow max_held=6"
+      },
+      {
+        "name": "age_clipped",
+        "ok": true,
+        "detail": "melon age=0.3333333432674408"
+      },
+      {
+        "name": "features_in_unit_interval",
+        "ok": true,
+        "detail": "all synthetic numeric features clipped to [0,1]"
+      },
+      {
+        "name": "crop_padding_zero",
+        "ok": true,
+        "detail": "empty tile uses crop/animal padding 0"
+      },
+      {
+        "name": "wheat_and_melon_crop_ids_differ",
+        "ok": true,
+        "detail": "wheat=1 melon=5"
+      },
+      {
+        "name": "category_counts",
+        "ok": true,
+        "detail": "kinds=6 crops=6 animals=4"
+      }
+    ]
+  },
+  "global": {
+    "vector": [
+      0.0,
+      0.0,
+      1.0,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "checks": [
+      {
+        "name": "global_dim",
+        "ok": true,
+        "detail": "62 vs 62"
+      },
+      {
+        "name": "in_unit_interval_except_trig",
+        "ok": true,
+        "detail": "finite"
+      },
+      {
+        "name": "start_money_is_half",
+        "ok": true,
+        "detail": "own=0.5000"
+      },
+      {
+        "name": "start_prices_half",
+        "ok": true,
+        "detail": "wheat_price=0.5000"
+      },
+      {
+        "name": "hour0_cos_one",
+        "ok": true,
+        "detail": "sin=0.0000 cos=1.0000"
+      },
+      {
+        "name": "hands_zero",
+        "ok": true,
+        "detail": "no hires at start"
+      },
+      {
+        "name": "hour6_quarter_turn",
+        "ok": true,
+        "detail": "hour encoding is cyclic"
+      },
+      {
+        "name": "player_swap_money_symmetric_at_start",
+        "ok": true,
+        "detail": "both start 3000"
+      }
+    ],
+    "feature_count": 62
+  },
+  "saved_games": {
+    "games_scanned": 2,
+    "player_observations": 192,
+    "farm_encodes": 384,
+    "parse_failures": 0,
+    "nans": 0,
+    "missing_step": 96,
+    "kind_counts": {
+      "EMPTY": 6068,
+      "LOCKED": 28800,
+      "WEED": 3382,
+      "PLANT": 150
+    },
+    "crop_counts": {
+      "MELON": 24,
+      "TOMATO": 10,
+      "STRAWBERRY": 60,
+      "CARROT": 28,
+      "WHEAT": 28
+    },
+    "animal_counts": {},
+    "money_min": 0.0,
+    "money_max": 3000.0,
+    "money_mean": 1281.0416666666667,
+    "farmer_on_locked": 220,
+    "top_farmer_positions": [
+      [
+        [
+          4,
+          4
+        ],
+        78
+      ],
+      [
+        [
+          5,
+          4
+        ],
+        28
+      ],
+      [
+        [
+          4,
+          3
+        ],
+        22
+      ],
+      [
+        [
+          4,
+          5
+        ],
+        22
+      ],
+      [
+        [
+          5,
+          5
+        ],
+        18
+      ],
+      [
+        [
+          3,
+          4
+        ],
+        18
+      ]
+    ],
+    "numeric_min": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "numeric_max": [
+      0.06666667014360428,
+      1.0,
+      0.5,
+      0.25,
+      0.6491228342056274,
+      1.0,
+      0.42500001192092896,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.20000000298023224,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.6666666865348816,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.0,
+      0.800000011920929
+    ],
+    "numeric_names": [
+      "age",
+      "basic_need_done_today",
+      "neglect_streak",
+      "yield_fill",
+      "market_price_vs_base",
+      "lifespan_known",
+      "lifespan_remaining",
+      "plant_fertilizer_remaining",
+      "animal_cared_today",
+      "animal_fertilizer_available",
+      "animal_pending_care_bonus",
+      "animal_occupied",
+      "type_is_ongoing",
+      "type_is_indefinite",
+      "type_purchase_cost",
+      "type_base_market_price",
+      "type_time_to_first_yield",
+      "type_has_time_to_max_yield",
+      "type_time_to_max_yield",
+      "type_subsequent_interval",
+      "type_subsequent_count",
+      "type_max_units",
+      "type_max_unfertilized_units",
+      "type_action_cost",
+      "type_build_action_cost",
+      "type_yield_per_tile_per_day"
+    ]
+  },
+  "live_game": {
+    "start": {
+      "label": "start",
+      "day": 0,
+      "hour": 0,
+      "money": [
+        3000.0,
+        3000.0
+      ],
+      "kinds": {
+        "EMPTY": 50,
+        "LOCKED": 150
+      },
+      "unlocked": [
+        [
+          "NW"
+        ],
+        [
+          "NW"
+        ]
+      ],
+      "hands": [
+        0,
+        0
+      ],
+      "tile_cat_shape": [
+        3,
+        10,
+        10
+      ],
+      "tile_num_shape": [
+        26,
+        10,
+        10
+      ],
+      "global_shape": [
+        62
+      ],
+      "global_finite": true
+    },
+    "day10": {
+      "label": "day10",
+      "day": 10,
+      "hour": 0,
+      "money": [
+        3040.0,
+        1900.0
+      ],
+      "kinds": {
+        "EMPTY": 40,
+        "LOCKED": 150,
+        "WEED": 9,
+        "PLANT": 1
+      },
+      "unlocked": [
+        [
+          "NW"
+        ],
+        [
+          "NW"
+        ]
+      ],
+      "hands": [
+        0,
+        0
+      ],
+      "tile_cat_shape": [
+        3,
+        10,
+        10
+      ],
+      "tile_num_shape": [
+        26,
+        10,
+        10
+      ],
+      "global_shape": [
+        62
+      ],
+      "global_finite": true
+    },
+    "final": {
+      "label": "final",
+      "day": 29,
+      "hour": 23,
+      "money": [
+        3425.0,
+        0.0
+      ],
+      "kinds": {
+        "EMPTY": 31,
+        "LOCKED": 150,
+        "WEED": 18,
+        "PLANT": 1
+      },
+      "unlocked": [
+        [
+          "NW"
+        ],
+        [
+          "NW"
+        ]
+      ],
+      "hands": [
+        0,
+        0
+      ],
+      "tile_cat_shape": [
+        3,
+        10,
+        10
+      ],
+      "tile_num_shape": [
+        26,
+        10,
+        10
+      ],
+      "global_shape": [
+        62
+      ],
+      "global_finite": true
+    },
+    "rewards": [
+      3425.0,
+      0.0
+    ]
+  },
+  "network": {
+    "tile_feat_shape": [
+      1,
+      32,
+      10,
+      10
+    ],
+    "spatial_shape": [
+      1,
+      64,
+      10,
+      10
+    ],
+    "global_shape": [
+      1,
+      64
+    ],
+    "tile_input_channels": 37,
+    "embedding_dim": 11,
+    "numeric_channels": 26,
+    "params": 50748,
+    "forward_ms": 3.523,
+    "grad_finite": true,
+    "local_mixer_isolates_tiles": true,
+    "spatial_mixes_neighbors": true,
+    "corner_swap_changes_spatial_center": true,
+    "padding": {
+      "left": 1,
+      "right": 2,
+      "top": 1,
+      "bottom": 2
+    },
+    "impulse_l1_nw": 534.093994140625,
+    "impulse_l1_se": 871.9652099609375,
+    "nw_se_response_ratio": 0.6125175500574748,
+    "crop_embeddings_differ": true,
+    "relu_global_can_zero": true
+  },
+  "coverage": {
+    "encoded": [
+      "age",
+      "animal_care",
+      "animal_fertilizer",
+      "animal_type",
+      "crop_type",
+      "hand_counts",
+      "hour_cyclic",
+      "lifespan",
+      "market_inventory",
+      "market_prices",
+      "money_both",
+      "neglect_streak",
+      "plant_fertilizer",
+      "price_vs_base_on_tile",
+      "season_progress",
+      "shed_seeds_carried",
+      "static_object_stats",
+      "tile_kind",
+      "town_shops",
+      "watered_or_fed_today",
+      "yield_fill"
+    ],
+    "missing": [
+      {
+        "id": "farmer_position",
+        "severity": "critical",
+        "why": "Her tur tek eylem bir konumda. A\u011f \u00e7ift\u00e7inin nerede durdu\u011funu g\u00f6rm\u00fcyor."
+      },
+      {
+        "id": "hand_positions",
+        "severity": "critical",
+        "why": "\u0130\u015f\u00e7iler ayr\u0131 birimler; sadece say\u0131 var, konum yok."
+      },
+      {
+        "id": "xy_coordinates",
+        "severity": "high",
+        "why": "Depo merkezde, kadranlar mutlak. Conv \u00f6teleme-de\u011fi\u015fmez; CoordConv yok."
+      },
+      {
+        "id": "shed_adjacency",
+        "severity": "high",
+        "why": "PICKUP/DROP yaln\u0131z (4,4)(5,4)(4,5)(5,5). Maske yok."
+      },
+      {
+        "id": "unlocked_quadrants",
+        "severity": "medium",
+        "why": "Sadece LOCKED tile'lardan \u00e7\u0131kar; BUY_LAND s\u0131ras\u0131/maliyeti yok."
+      },
+      {
+        "id": "hires_today",
+        "severity": "medium",
+        "why": "Sonraki HIRE Fibonacci maliyeti g\u00f6zlemde var, vekt\u00f6rde yok."
+      },
+      {
+        "id": "opponent_farm_stream",
+        "severity": "high",
+        "why": "Rakip tahtas\u0131 payla\u015f\u0131l\u0131yor ama model tek tarla encode ediyor. Pazar dump i\u00e7in \u015fart."
+      },
+      {
+        "id": "fusion_policy_head",
+        "severity": "critical",
+        "why": "Tile + spatial + global birle\u015fmiyor; aksiyon ba\u015f\u0131 yok."
+      },
+      {
+        "id": "unit_inventories_separate",
+        "severity": "medium",
+        "why": "Cepler toplanm\u0131\u015f; hangi birimin ne ta\u015f\u0131d\u0131\u011f\u0131 kay\u0131p."
+      },
+      {
+        "id": "asymmetric_padding",
+        "severity": "high",
+        "why": "4x4 + pad (1,2,1,2) NW'ye daha \u00e7ok ger\u00e7ek kiremit, SE'ye daha \u00e7ok s\u0131f\u0131r verir."
+      },
+      {
+        "id": "money_scale",
+        "severity": "medium",
+        "why": "x/(x+3000): 3k\u21920.50, 27k\u21920.90. Ge\u00e7 sezon nakit s\u0131k\u0131\u015f\u0131r."
+      },
+      {
+        "id": "receptive_field",
+        "severity": "medium",
+        "why": "Tek 4x4 katman. 10x10 tarlada uzak sulama/hasat ayn\u0131 \u00f6zellikte birle\u015fmez."
+      }
+    ]
+  }
+}
