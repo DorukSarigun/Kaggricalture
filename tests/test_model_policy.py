@@ -169,7 +169,10 @@ class PolicyModelTests(unittest.TestCase):
         için bu özelliği taşımıyordu. Kenar etkisini dışlamak adına alıcı
         alandan geniş bir harita üzerinde iç bölge karşılaştırılır.
         """
-        encoder = SpatialEncoder().eval()
+        # Keep this numerical fixture independent of other models' RNG use.
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(0)
+            encoder = SpatialEncoder().eval()
         base = torch.zeros(1, 32, 24, 24)
         base[0, :, 8, 8] = 1.0
         shifted = torch.roll(base, shifts=(1, 1), dims=(2, 3))

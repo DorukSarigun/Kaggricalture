@@ -52,6 +52,8 @@ class PPORecord:
     token_credit_roles: np.ndarray
     action_spans: tuple[ActionSpanRecord, ...]
     span_credits: tuple[SpanTrainingCredit, ...]
+    realized_return_target: float | None = None
+    potential_offset: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +81,10 @@ class PPOUpdateMetrics:
     market_operation_kl: float
     item_kl: float
     quantity_kl: float
+    realized_value_loss: float = 0.0
+    last_epoch_attempted_kl: float = 0.0
+    target_kl: float = 0.0
+    kl_skip_threshold: float = 0.0
 
 
 class EpisodeRollout:
@@ -91,6 +97,10 @@ class EpisodeRollout:
     ) -> None:
         self.reward_config = reward_config or RewardConfig()
         self.ppo_config = ppo_config or PPOConfig()
+        if self.reward_config.mode == "cash_progress" and self.ppo_config.gamma != 1.0:
+            raise ValueError("cash_progress PPO gamma=1 gerektirir.")
+        if self.reward_config.mode == "cash_progress" and self.ppo_config.span_policy_coef > 0:
+            raise ValueError("cash_progress ile yerel span kredisi birlikte etkinleştirilemez.")
         if not np.isclose(self.reward_config.gamma, self.ppo_config.gamma):
             raise ValueError(
                 "Potential shaping ve PPO aynı gamma değerini kullanmalı."
@@ -110,6 +120,10 @@ class EpisodeRollout:
             raise RuntimeError("Terminal transition'dan sonra episode'a veri eklenemez.")
         if not math.isfinite(lifecycle_credit):
             raise ValueError("lifecycle_credit sonlu olmalı.")
+        if self.reward_config.mode == "cash_progress" and lifecycle_credit != 0:
+            raise ValueError("cash_progress gerçekleşmiş nakde ayrıca lifecycle reward eklemez.")
+        if self.ppo_config.realized_value_coef > 0 and lifecycle_credit != 0:
+            raise ValueError("Gerçekleşmiş getiri critic'i ek lifecycle reward ile karıştırılamaz.")
         shaped = transition_reward(
             observation,
             next_observation,
@@ -262,6 +276,14 @@ class EpisodeRollout:
             return []
         if self.transitions[-1].done:
             bootstrap_value = 0.0
+        if self.ppo_config.realized_value_coef > 0 and not self.transitions[-1].done:
+            raise ValueError("Gerçekleşmiş getiri hedefi için tam episode gerekli; truncation kabul edilmez.")
+        realized_returns: list[float | None] = [None] * len(self.transitions)
+        if self.transitions[-1].done:
+            future = 0.0
+            for index in reversed(range(len(self.transitions))):
+                future = self.transitions[index].reward.base + self.ppo_config.gamma * future
+                realized_returns[index] = future
 
         rewards = torch.tensor(
             [[transition.reward.total] for transition in self.transitions],
@@ -292,6 +314,8 @@ class EpisodeRollout:
                 token_credit_roles=transition.token_credit_roles.copy(),
                 action_spans=transition.action_spans,
                 span_credits=transition.span_credits,
+                realized_return_target=realized_returns[index],
+                potential_offset=self.reward_config.shaping_beta * transition.reward.current_potential,
             )
             for index, transition in enumerate(self.transitions)
         ]
@@ -364,7 +388,18 @@ def ppo_update(
                 span_credit_scaler=span_credit_scaler,
                 device=device,
             )
-            loss = actor_critic_ppo_loss(model, batch, config)
+            realized_returns = None
+            potential_offsets = None
+            if config.realized_value_coef > 0:
+                if any(record.realized_return_target is None for record in selected):
+                    raise ValueError("Eksik gerçekleşmiş getiri hedefi.")
+                realized_returns = torch.tensor([r.realized_return_target for r in selected],
+                                               dtype=torch.float32, device=device)
+                potential_offsets = torch.tensor([r.potential_offset for r in selected],
+                                                dtype=torch.float32, device=device)
+            loss = actor_critic_ppo_loss(model, batch, config,
+                                        realized_returns=realized_returns,
+                                        potential_offsets=potential_offsets)
             minibatch_kl = float(loss.approximate_kl)
             epoch_kls.append(minibatch_kl)
 
@@ -396,6 +431,7 @@ def ppo_update(
                     float(loss.market_operation_kl),
                     float(loss.item_kl),
                     float(loss.quantity_kl),
+                    0.0 if loss.realized_value is None else float(loss.realized_value.detach()),
                 )
             )
         epochs_completed = epoch + 1
@@ -436,4 +472,8 @@ def ppo_update(
         market_operation_kl=float(means[16]),
         item_kl=float(means[17]),
         quantity_kl=float(means[18]),
+        realized_value_loss=float(means[19]),
+        last_epoch_attempted_kl=float(np.mean(epoch_kls)),
+        target_kl=config.target_kl,
+        kl_skip_threshold=skip_threshold,
     )

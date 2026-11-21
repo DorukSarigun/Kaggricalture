@@ -8,8 +8,11 @@ import unittest
 from kaggle_environments import make
 
 from action_encoding import encode_action_tokens
+from cash_accounting import CashLedger
 from kinds import PlantTile, parse_tile
 from lifecycle_tracking import FarmLifecycleTracker, LifecycleEventType
+from market_execution import trace_market_executions
+from realized_credit import assign_realized_credit
 from lifecycle_credit import (
     LifecycleCreditAssigner,
     LifecycleCreditConfig,
@@ -35,6 +38,39 @@ class LifecycleTrackingTests(unittest.TestCase):
             token_ids=token_ids,
             transition_reward=0.0,
         )
+
+    def _play_traced(self, env, tracker, script, configuration, ledger=None):
+        refs = {}
+        for step, (unit, market) in enumerate(script):
+            action = {"farmer": unit, "hands": [], "market": market}
+            observations = [deepcopy(s.observation) for s in env.state]
+            for obs in observations:
+                obs["step"] = step
+            actions = [action, PASS]
+            executions = trace_market_executions(observations, actions, configuration)
+            env.step(actions)
+            after = deepcopy(env.state[0].observation)
+            after["step"] = step + 1
+            local = {("unit", 0): step * 2}
+            if market:
+                for index in range(len(market)):
+                    local[("market", index)] = step * 2 + 1 + index
+            refs.update({(step, *key): value for key, value in local.items()})
+            tracker.observe_transition(
+                observations[0],
+                action,
+                after,
+                market_executions=executions[0],
+                decision_refs=local,
+            )
+            if ledger is not None:
+                ledger.observe(
+                    step,
+                    executions,
+                    [farm["money"] for farm in observations[0]["farms"]],
+                    [farm["money"] for farm in after["farms"]],
+                )
+        return refs
 
     def test_seed_to_plant_to_harvest_to_sale_lineage(self) -> None:
         env = make(
@@ -272,6 +308,150 @@ class LifecycleTrackingTests(unittest.TestCase):
                 for assignment in assignments
             )
         )
+
+    def test_animal_purchase_place_feed_harvest_sale_lineage(self) -> None:
+        configuration = {
+            "episodeSteps": 40,
+            "turnsPerDay": 4,
+            "weedSpawnChance": 0.0,
+            "seed": 3,
+        }
+        env = make("kaggriculture", configuration=configuration)
+        tracker = FarmLifecycleTracker(
+            env.state[0].observation,
+            episode_number=1,
+            player_index=0,
+            turns_per_day=4,
+        )
+        script = [
+            (["PASS"], [["BUY_PRODUCT", "WHEAT", 8], ["BUY_ANIMAL", "GOOSE", 1]]),
+            (["PICKUP", "GOOSE"], []),
+            (["BUILD_COOP"], []),
+            (["PLACE", "GOOSE"], []),
+            (["PICKUP", "WHEAT", 8], []),
+        ]
+        # Night returns carried wheat to the shed; pick up again before each FEED.
+        script.extend([
+            (["PICKUP", "WHEAT", 1], []),
+            (["FEED"], []),
+            (["CARE"], []),
+            (["PASS"], []),
+        ] * 4)
+        script.extend([
+            (["COLLECT_FERTILIZER"], []),
+            (["HARVEST"], []),
+            (["DROP"], []),
+            (["PASS"], [["SELL", "EGG", 4], ["SELL", "FERTILIZER", 1]]),
+        ])
+        ledger = CashLedger([3000, 3000])
+        refs = self._play_traced(env, tracker, script, configuration, ledger)
+        types = [event.event_type for event in tracker.events]
+        self.assertIn(LifecycleEventType.ANIMAL_PURCHASED, types)
+        self.assertIn(LifecycleEventType.STRUCTURE_BUILT, types)
+        self.assertIn(LifecycleEventType.ANIMAL_PLACED, types)
+        self.assertIn(LifecycleEventType.ANIMAL_FED, types)
+        self.assertIn(LifecycleEventType.ANIMAL_CARED, types)
+        self.assertIn(LifecycleEventType.FERTILIZER_COLLECTED, types)
+        self.assertIn(LifecycleEventType.HARVESTED, types)
+        harvest = next(
+            event for event in tracker.events
+            if event.event_type is LifecycleEventType.HARVESTED and event.animal_id
+        )
+        sales = [
+            event for event in tracker.events
+            if event.event_type is LifecycleEventType.PRODUCT_SOLD
+        ]
+        self.assertTrue(any(
+            allocation.get("source_animal_id") == harvest.animal_id
+            for sale in sales
+            for allocation in sale.data["allocations"]
+        ))
+        animals = tracker.animal_lifecycles()
+        self.assertEqual(len(animals), 1)
+        self.assertGreater(animals[0]["harvested_units"], 0)
+        self.assertGreater(animals[0]["sold_units"], 0)
+        self.assertGreater(len(animals[0]["care_steps"]), 0)
+        self.assertGreater(len(animals[0]["fertilizer_events"]), 0)
+        report = assign_realized_credit(tracker.events, ledger.entries, refs, 0)
+        self.assertEqual(report["unknown_source_sale_revenue"], 0)
+        self.assertAlmostEqual(report["allocated_gold"], ledger.final_money[0] - 3000)
+        chain = next(allocation for allocation in report["allocations"] if allocation["kind"] == "animal")
+        self.assertGreater(chain["cost"], 300)
+        self.assertGreater(chain["sold_units"], 0)
+        self.assertNotIn(LifecycleEventType.ANIMAL_LOST, types)
+
+    def test_unplaced_animal_keeps_purchase_cost_after_night_drop(self) -> None:
+        configuration = {
+            "episodeSteps": 20,
+            "turnsPerDay": 4,
+            "weedSpawnChance": 0.0,
+            "seed": 3,
+        }
+        env = make("kaggriculture", configuration=configuration)
+        tracker = FarmLifecycleTracker(
+            env.state[0].observation,
+            episode_number=1,
+            player_index=0,
+            turns_per_day=4,
+        )
+        script = [
+            (["PASS"], [["BUY_ANIMAL", "GOOSE", 1]]),
+            (["PICKUP", "GOOSE"], []),
+            (["PASS"], []),
+            (["PASS"], []),
+            (["PICKUP", "GOOSE"], []),
+            (["BUILD_COOP"], []),
+            (["PLACE", "GOOSE"], []),
+        ]
+        self._play_traced(env, tracker, script, configuration)
+        placed = next(
+            event for event in tracker.events
+            if event.event_type is LifecycleEventType.ANIMAL_PLACED
+        )
+        self.assertAlmostEqual(placed.data["animal_unit_cost"], 300)
+        self.assertIsNotNone(placed.animal_lot_id)
+        self.assertNotIn(
+            LifecycleEventType.ANIMAL_LOST,
+            [event.event_type for event in tracker.events],
+        )
+
+    def test_unfed_animal_escape_is_oldest_heavy_unit_loss(self) -> None:
+        configuration = {
+            "episodeSteps": 20,
+            "turnsPerDay": 4,
+            "weedSpawnChance": 0.0,
+            "seed": 3,
+        }
+        env = make("kaggriculture", configuration=configuration)
+        tracker = FarmLifecycleTracker(
+            env.state[0].observation,
+            episode_number=1,
+            player_index=0,
+            turns_per_day=4,
+        )
+        script = [
+            (["PASS"], [["BUY_ANIMAL", "GOOSE", 1]]),
+            (["PICKUP", "GOOSE"], []),
+            (["BUILD_COOP"], []),
+            (["PLACE", "GOOSE"], []),
+            (["PASS"], []),
+            (["PASS"], []),
+            (["PASS"], []),
+            (["PASS"], []),
+        ]
+        ledger = CashLedger([3000, 3000])
+        refs = self._play_traced(env, tracker, script, configuration, ledger)
+        lost = next(
+            event for event in tracker.events
+            if event.event_type is LifecycleEventType.ANIMAL_LOST
+        )
+        self.assertEqual(lost.data["reason"], "ESCAPED")
+        report = assign_realized_credit(tracker.events, ledger.entries, refs, 0)
+        loss = next(allocation for allocation in report["allocations"] if allocation["kind"] == "unsold_animal")
+        shares = {share["decision_id"]: share["gold"] for share in loss["shares"]}
+        self.assertLess(shares[min(shares)], shares[max(shares)])
+        self.assertAlmostEqual(report["allocated_gold"], -300)
+        self.assertAlmostEqual(report["allocated_gold"], ledger.final_money[0] - 3000)
 
     def test_planted_day_is_encoded_as_tile_age(self) -> None:
         raw_tile = {

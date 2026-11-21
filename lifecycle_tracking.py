@@ -1,9 +1,10 @@
-"""Seed -> plant -> harvest -> sale yaşam döngüsü için event-sourcing tracker.
+"""Seed/animal -> tile -> harvest -> sale yaşam döngüsü için event-sourcing tracker.
 
 Oyun motoru aynı tür item'ları sayaçlarda birleştirir; gerçek nesne kimliği
 sağlamaz. Bu modül observation veya environment'i değiştirmeden deterministik
-sentetik lot/plant kimlikleri üretir. Birleşen inventory'lerden satış kaynağı
-FIFO muhasebe kuralıyla atanır.
+sentetik lot/plant/animal kimlikleri üretir. Birleşen inventory'lerden satış
+kaynağı FIFO muhasebe kuralıyla atanır. Yerleştirilmiş hayvan tile'da
+`animal_id` ile sabittir; shed/el stoku ve EGG/MILK/WOOL/gübre FIFO'dur.
 """
 
 from __future__ import annotations
@@ -38,6 +39,16 @@ class LifecycleEventType(StrEnum):
     PRODUCT_SOLD = "PRODUCT_SOLD"
     HIRED = "HIRED"
     INVENTORY_RECONCILED = "INVENTORY_RECONCILED"
+    UNIT_MOVED = "UNIT_MOVED"
+    TILE_CLEARED = "TILE_CLEARED"
+    ANIMAL_PURCHASED = "ANIMAL_PURCHASED"
+    STRUCTURE_BUILT = "STRUCTURE_BUILT"
+    ANIMAL_PLACED = "ANIMAL_PLACED"
+    ANIMAL_FED = "ANIMAL_FED"
+    ANIMAL_CARED = "ANIMAL_CARED"
+    FERTILIZER_COLLECTED = "FERTILIZER_COLLECTED"
+    ANIMAL_LOST = "ANIMAL_LOST"
+    ANIMAL_STOCK_MOVED = "ANIMAL_STOCK_MOVED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +72,10 @@ class LifecycleEvent:
     player: int
     token_span: ActionTokenSpan | None = None
     plant_id: str | None = None
+    animal_id: str | None = None
     seed_lot_id: str | None = None
     product_lot_id: str | None = None
+    animal_lot_id: str | None = None
     purchase_id: str | None = None
     hire_id: str | None = None
     crop: str | None = None
@@ -72,6 +85,8 @@ class LifecycleEvent:
     normalized_credit: float = 0.0
     transition_reward: float | None = None
     data: Mapping[str, Any] = field(default_factory=dict)
+    # Structured decision index, independent of legacy token spans.
+    decision_id: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
@@ -107,9 +122,22 @@ class _ProductLotState:
     item: str
     source_plant_id: str | None
     source_purchase_id: str | None
+    source_animal_id: str | None
     unit_cost: float
     remaining: int
     location: str
+
+
+@dataclass(slots=True)
+class _AnimalStockState:
+    lot_id: str
+    animal: str
+    remaining: int
+    unit_cost: float
+    location: str
+    purchase_event_id: str | None
+    purchase_decision_id: int | None
+    extra_decisions: set = field(default_factory=set)
 
 
 def extract_action_token_spans(
@@ -196,6 +224,7 @@ class FarmLifecycleTracker:
         shed_capacity: int = 100,
         reward_scale: float = 3000.0,
         sink: LifecycleEventSink | None = None,
+        graph_tracking: bool = False,
     ) -> None:
         self.episode_number = int(episode_number)
         self.player_index = (
@@ -206,15 +235,22 @@ class FarmLifecycleTracker:
         self.turns_per_day = int(turns_per_day)
         self.shed_capacity = int(shed_capacity)
         self.reward_scale = float(reward_scale)
+        self.graph_tracking = graph_tracking
         self.journal = InMemoryEventJournal()
         self._external_sink = sink
         self._sequence = 0
+        self._decision_id: int | None = None
+        self._decision_refs: Mapping[tuple[str, int], int] = {}
         self._seed_lots: dict[str, _SeedLotState] = {}
         self._seed_queues: dict[str, deque[str]] = defaultdict(deque)
         self._product_lots: dict[str, _ProductLotState] = {}
         self._product_queues: dict[tuple[str, str], deque[str]] = defaultdict(deque)
         self._active_plants: dict[tuple[int, int], str] = {}
         self._plant_identity: dict[str, tuple[str, int]] = {}
+        self._active_animals: dict[tuple[int, int], str] = {}
+        self._animal_identity: dict[str, tuple[str, int]] = {}
+        self._animal_stock: dict[str, _AnimalStockState] = {}
+        self._animal_stock_queues: dict[tuple[str, str], deque[str]] = defaultdict(deque)
         self._bootstrap(initial_observation)
 
     @property
@@ -239,6 +275,7 @@ class FarmLifecycleTracker:
     ) -> LifecycleEvent:
         step, day, hour = self._clock(observation)
         event = LifecycleEvent(
+            decision_id=self._decision_id,
             event_id=self._next_id("event"),
             event_type=event_type,
             episode=self.episode_number,
@@ -273,6 +310,8 @@ class FarmLifecycleTracker:
             for x, tile in enumerate(row):
                 if isinstance(tile, Mapping) and tile.get("kind") == "PLANT":
                     self._observe_existing_plant(observation, x, y, tile)
+                elif isinstance(tile, Mapping) and "animal" in tile:
+                    self._observe_existing_animal(observation, x, y, tile)
 
         for item in game.PRODUCTS:
             shed_quantity = int(private["shed"].get(item, 0))
@@ -293,6 +332,30 @@ class FarmLifecycleTracker:
                         location=f"unit:{unit_index}",
                         source_plant_id=None,
                     )
+        for animal in game.ANIMALS:
+            shed_quantity = int(private["shed"].get(animal, 0))
+            if shed_quantity > 0:
+                self._add_animal_stock(animal, shed_quantity, 0.0, "shed")
+            for unit_index, inventory in enumerate(private["inventories"]):
+                quantity = int(inventory.get(animal, 0))
+                if quantity > 0:
+                    self._add_animal_stock(animal, quantity, 0.0, f"unit:{unit_index}")
+
+        # Graph consumers need explicit identities even for gifted/bootstrap
+        # inventory. Its prior cost/history is unknown, not reconstructed.
+        if self.graph_tracking:
+            for lot_id, lot in self._product_lots.items():
+                if lot.remaining > 0:
+                    self._emit(LifecycleEventType.INVENTORY_RECONCILED, observation,
+                               product_lot_id=lot_id, crop=lot.item, quantity=lot.remaining,
+                               data={"source": "external_or_unobserved", "destination": lot.location,
+                                     "reason": "initial_inventory"})
+            for lot_id, lot in self._animal_stock.items():
+                if lot.remaining > 0:
+                    self._emit(LifecycleEventType.INVENTORY_RECONCILED, observation,
+                               animal_lot_id=lot_id, quantity=lot.remaining,
+                               data={"source": "external_or_unobserved", "destination": lot.location,
+                                     "animal": lot.animal, "reason": "initial_inventory"})
 
     def _add_seed_lot(self, crop: str, quantity: int, unit_cost: float) -> str:
         lot_id = self._next_id("seedlot")
@@ -316,6 +379,85 @@ class FarmLifecycleTracker:
             return lot.lot_id, lot.unit_cost
         return None, 0.0
 
+    def _add_animal_stock(
+        self,
+        animal: str,
+        quantity: int,
+        unit_cost: float,
+        location: str,
+        *,
+        purchase_event_id: str | None = None,
+        purchase_decision_id: int | None = None,
+    ) -> str:
+        lot_id = self._next_id("animallot")
+        self._animal_stock[lot_id] = _AnimalStockState(
+            lot_id=lot_id,
+            animal=animal,
+            remaining=int(quantity),
+            unit_cost=float(unit_cost),
+            location=location,
+            purchase_event_id=purchase_event_id,
+            purchase_decision_id=purchase_decision_id,
+        )
+        self._animal_stock_queues[(location, animal)].append(lot_id)
+        return lot_id
+
+    def _take_animal_stock(self, location: str, animal: str, quantity: int) -> list[_AnimalStockState]:
+        queue = self._animal_stock_queues[(location, animal)]
+        remaining = int(quantity)
+        taken: list[_AnimalStockState] = []
+        while remaining > 0 and queue:
+            lot = self._animal_stock[queue[0]]
+            if lot.remaining <= 0 or lot.location != location:
+                queue.popleft()
+                continue
+            take = min(remaining, lot.remaining)
+            lot.remaining -= take
+            remaining -= take
+            taken.append(
+                _AnimalStockState(
+                    lot_id=lot.lot_id,
+                    animal=lot.animal,
+                    remaining=take,
+                    unit_cost=lot.unit_cost,
+                    location=location,
+                    purchase_event_id=lot.purchase_event_id,
+                    purchase_decision_id=lot.purchase_decision_id,
+                    extra_decisions=set(lot.extra_decisions),
+                )
+            )
+            if lot.remaining <= 0:
+                queue.popleft()
+        if remaining > 0:
+            if self.graph_tracking:
+                raise ValueError(f"Missing animal provenance: {location}, {animal}, {remaining}")
+            lot_id = self._add_animal_stock(animal, remaining, 0.0, location)
+            lot = self._animal_stock[lot_id]
+            lot.remaining = 0
+            self._animal_stock_queues[(location, animal)].pop()
+            taken.append(lot)
+        return taken
+
+    def _move_animal_stock(self, source: str, destination: str, animal: str, quantity: int,
+                           observation: Mapping[str, Any] | None = None) -> None:
+        for piece in self._take_animal_stock(source, animal, quantity):
+            if self._decision_id is not None:
+                piece.extra_decisions.add(self._decision_id)
+            dest_id = self._add_animal_stock(
+                animal,
+                piece.remaining,
+                piece.unit_cost,
+                destination,
+                purchase_event_id=piece.purchase_event_id,
+                purchase_decision_id=piece.purchase_decision_id,
+            )
+            self._animal_stock[dest_id].extra_decisions = set(piece.extra_decisions)
+            if self.graph_tracking and observation is not None:
+                self._emit(LifecycleEventType.ANIMAL_STOCK_MOVED, observation,
+                           quantity=piece.remaining,
+                           data={"source": source, "destination": destination, "animal": animal,
+                                 "source_lot_id": piece.lot_id, "destination_lot_id": dest_id})
+
     def _add_product_lot(
         self,
         item: str,
@@ -324,6 +466,7 @@ class FarmLifecycleTracker:
         location: str,
         source_plant_id: str | None,
         source_purchase_id: str | None = None,
+        source_animal_id: str | None = None,
         unit_cost: float = 0.0,
     ) -> str:
         lot_id = self._next_id("productlot")
@@ -332,6 +475,7 @@ class FarmLifecycleTracker:
             item=item,
             source_plant_id=source_plant_id,
             source_purchase_id=source_purchase_id,
+            source_animal_id=source_animal_id,
             unit_cost=float(unit_cost),
             remaining=int(quantity),
             location=location,
@@ -361,6 +505,7 @@ class FarmLifecycleTracker:
                     "product_lot_id": lot.lot_id,
                     "source_plant_id": lot.source_plant_id,
                     "source_purchase_id": lot.source_purchase_id,
+                    "source_animal_id": lot.source_animal_id,
                     "unit_cost": lot.unit_cost,
                     "allocated_cost": take * lot.unit_cost,
                     "quantity": take,
@@ -383,6 +528,7 @@ class FarmLifecycleTracker:
                     "product_lot_id": lot_id,
                     "source_plant_id": None,
                     "source_purchase_id": None,
+                    "source_animal_id": None,
                     "unit_cost": 0.0,
                     "allocated_cost": 0.0,
                     "quantity": remaining,
@@ -407,6 +553,7 @@ class FarmLifecycleTracker:
                 location=destination,
                 source_plant_id=source_lot.source_plant_id,
                 source_purchase_id=source_lot.source_purchase_id,
+                source_animal_id=source_lot.source_animal_id,
                 unit_cost=source_lot.unit_cost,
             )
             allocation["destination_product_lot_id"] = destination_lot_id
@@ -464,6 +611,48 @@ class FarmLifecycleTracker:
             return self._observe_existing_plant(observation, x, y, tile)
         return plant_id
 
+    def _observe_existing_animal(
+        self,
+        observation: Mapping[str, Any],
+        x: int,
+        y: int,
+        tile: Mapping[str, Any],
+    ) -> str:
+        coordinate = (int(x), int(y))
+        existing = self._active_animals.get(coordinate)
+        identity = (str(tile["animal"]), int(tile["placed_day"]))
+        if existing is not None and self._animal_identity.get(existing) == identity:
+            return existing
+        animal_id = self._next_id("animal")
+        self._active_animals[coordinate] = animal_id
+        self._animal_identity[animal_id] = identity
+        self._emit(
+            LifecycleEventType.ANIMAL_PLACED,
+            observation,
+            animal_id=animal_id,
+            tile_xy=coordinate,
+            data={
+                "animal": identity[0],
+                "placed_day": identity[1],
+                "source": "observed_existing_tile",
+                "animal_unit_cost": 0.0,
+            },
+        )
+        return animal_id
+
+    def _animal_for_tile(
+        self,
+        observation: Mapping[str, Any],
+        x: int,
+        y: int,
+        tile: Mapping[str, Any],
+    ) -> str:
+        animal_id = self._active_animals.get((x, y))
+        identity = (str(tile["animal"]), int(tile["placed_day"]))
+        if animal_id is None or self._animal_identity.get(animal_id) != identity:
+            return self._observe_existing_animal(observation, x, y, tile)
+        return animal_id
+
     def _emit_product_move(
         self,
         observation: Mapping[str, Any],
@@ -498,6 +687,13 @@ class FarmLifecycleTracker:
             lot.remaining
             for lot in self._product_lots.values()
             if lot.location == location and lot.item == item and lot.remaining > 0
+        )
+
+    def _tracked_animal_quantity(self, location: str, animal: str) -> int:
+        return sum(
+            lot.remaining
+            for lot in self._animal_stock.values()
+            if lot.location == location and lot.animal == animal and lot.remaining > 0
         )
 
     def _reconcile_product_inventories(
@@ -604,6 +800,115 @@ class FarmLifecycleTracker:
                     },
                 )
 
+    def _reconcile_animal_inventories(
+        self,
+        observation: Mapping[str, Any],
+        next_observation: Mapping[str, Any],
+        transition_reward: float | None,
+    ) -> None:
+        """Gece DROP canlı hayvan stokunu da shede taşır; FIFO maliyet korunur."""
+        private = next_observation["private"]
+        locations = [
+            "shed",
+            *(f"unit:{index}" for index in range(len(private["inventories"]))),
+        ]
+        for animal in game.ANIMALS:
+            desired = {
+                "shed": int(private["shed"].get(animal, 0)),
+                **{
+                    f"unit:{index}": int(inventory.get(animal, 0))
+                    for index, inventory in enumerate(private["inventories"])
+                },
+            }
+            current_locations = {
+                lot.location
+                for lot in self._animal_stock.values()
+                if lot.animal == animal and lot.remaining > 0
+            }
+            all_locations = list(dict.fromkeys([*locations, *sorted(current_locations)]))
+
+            for destination in all_locations:
+                deficit = desired.get(destination, 0) - self._tracked_animal_quantity(
+                    destination, animal
+                )
+                if deficit <= 0:
+                    continue
+                for source in all_locations:
+                    if source == destination or deficit <= 0:
+                        continue
+                    surplus = self._tracked_animal_quantity(source, animal) - desired.get(
+                        source, 0
+                    )
+                    if surplus <= 0:
+                        continue
+                    moved = min(deficit, surplus)
+                    before_ids = {
+                        lot.lot_id
+                        for lot in self._animal_stock.values()
+                        if lot.location == destination and lot.animal == animal and lot.remaining > 0
+                    }
+                    self._move_animal_stock(source, destination, animal, moved, observation)
+                    after_ids = [
+                        lot.lot_id
+                        for lot in self._animal_stock.values()
+                        if lot.location == destination
+                        and lot.animal == animal
+                        and lot.remaining > 0
+                        and lot.lot_id not in before_ids
+                    ]
+                    self._emit(
+                        LifecycleEventType.INVENTORY_RECONCILED,
+                        observation,
+                        quantity=moved,
+                        transition_reward=transition_reward,
+                        data={
+                            "source": source,
+                            "destination": destination,
+                            "animal": animal,
+                            "animal_lot_ids": after_ids,
+                            "reason": "observation_location_reconciliation",
+                        },
+                    )
+                    deficit -= moved
+                if deficit > 0:
+                    lot_id = self._add_animal_stock(animal, deficit, 0.0, destination)
+                    self._emit(
+                        LifecycleEventType.INVENTORY_RECONCILED,
+                        observation,
+                        animal_lot_id=lot_id,
+                        quantity=deficit,
+                        transition_reward=transition_reward,
+                        data={
+                            "source": "external_or_unobserved",
+                            "destination": destination,
+                            "animal": animal,
+                            "reason": "observation_quantity_increase",
+                        },
+                    )
+
+            for source in all_locations:
+                surplus = self._tracked_animal_quantity(source, animal) - desired.get(
+                    source, 0
+                )
+                if surplus <= 0:
+                    continue
+                taken = self._take_animal_stock(source, animal, surplus)
+                self._emit(
+                    LifecycleEventType.INVENTORY_RECONCILED,
+                    observation,
+                    quantity=surplus,
+                    transition_reward=transition_reward,
+                    data={
+                        "source": source,
+                        "destination": "lost_or_consumed",
+                        "animal": animal,
+                        "animal_lot_ids": [piece.lot_id for piece in taken],
+                        "animal_allocations": [{"animal_lot_id": piece.lot_id,
+                                                "quantity": piece.remaining} for piece in taken],
+                        "reason": "observation_quantity_decrease",
+                    },
+                )
+
     def _observe_traced_market(
         self,
         observation: Mapping[str, Any],
@@ -621,6 +926,7 @@ class FarmLifecycleTracker:
         hire_ordinal = 0
 
         for execution in sorted(executions, key=lambda row: row.order_index):
+            self._decision_id = self._decision_refs.get(("market", execution.order_index))
             token_span = token_spans.get(("market", execution.order_index))
             operation = execution.operation
             item = execution.item
@@ -724,6 +1030,37 @@ class FarmLifecycleTracker:
                 )
                 continue
 
+            if operation == "BUY_ANIMAL" and item in game.ANIMALS:
+                total_cost = execution.total_value
+                unit_cost = total_cost / quantity
+                lot_ids = [
+                    self._add_animal_stock(item, 1, unit_cost, "shed")
+                    for _ in range(quantity)
+                ]
+                event = self._emit(
+                    LifecycleEventType.ANIMAL_PURCHASED,
+                    observation,
+                    token_span=token_span,
+                    animal_lot_id=lot_ids[0] if lot_ids else None,
+                    quantity=quantity,
+                    attributed_value=-total_cost,
+                    normalized_credit=-total_cost / self.reward_scale,
+                    transition_reward=transition_reward,
+                    data={
+                        "animal": item,
+                        "requested_quantity": execution.requested_quantity,
+                        "unit_cost": unit_cost,
+                        "total_cost": total_cost,
+                        "animal_lot_ids": lot_ids,
+                        "execution_source": "lockstep_market_replay",
+                    },
+                )
+                for lot_id in lot_ids:
+                    stock = self._animal_stock[lot_id]
+                    stock.purchase_event_id = event.event_id
+                    stock.purchase_decision_id = event.decision_id
+                continue
+
             if operation == "HIRE":
                 cost = execution.total_value
                 hire_id = self._next_id("hire")
@@ -788,9 +1125,12 @@ class FarmLifecycleTracker:
         token_ids: Sequence[int] = (),
         transition_reward: float | None = None,
         market_executions: Sequence[MarketOrderExecution] | None = None,
+        decision_refs: Mapping[tuple[str, int], int] | None = None,
     ) -> tuple[LifecycleEvent, ...]:
         """Bir environment geçişini izler ve o geçişteki event'leri döndürür."""
         event_start = len(self.journal.events)
+        self._decision_refs = decision_refs or {}
+        self._decision_id = None
         token_spans = (
             extract_action_token_spans(token_ids) if len(token_ids) > 0 else {}
         )
@@ -817,6 +1157,7 @@ class FarmLifecycleTracker:
         successful_plants: Counter[str] = Counter()
 
         for unit_index, raw_action in enumerate(unit_actions):
+            self._decision_id = self._decision_refs.get(("unit", unit_index))
             unit_action = list(raw_action) if raw_action else ["PASS"]
             if (
                 unit_action[0] == "PLANT"
@@ -846,6 +1187,18 @@ class FarmLifecycleTracker:
             after_tile = deepcopy(farm["tiles"][y][x])
             after_inventory = deepcopy(game._farmer_inventory(private, unit_index))
             op = str(unit_action[0])
+
+            new_position = game._farmer_position(farm, unit_index)
+            if decision_refs is not None and new_position is not None and tuple(new_position) != (x, y):
+                self._emit(
+                    LifecycleEventType.UNIT_MOVED, observation,
+                    data={"unit_index": unit_index, "from_xy": [x, y],
+                          "to_xy": list(new_position),
+                          "carried_product_lot_ids": [lot.lot_id for lot in self._product_lots.values()
+                              if lot.location == f"unit:{unit_index}" and lot.remaining > 0],
+                          "carried_animal_lot_ids": [lot.lot_id for lot in self._animal_stock.values()
+                              if lot.location == f"unit:{unit_index}" and lot.remaining > 0]},
+                )
 
             if op == "PLANT" and not self._same_plant(before_tile, after_tile):
                 if isinstance(after_tile, Mapping) and after_tile.get("kind") == "PLANT":
@@ -897,6 +1250,13 @@ class FarmLifecycleTracker:
                     before_tile.get("fertilized_until_day", -1)
                 ):
                     plant_id = self._plant_for_tile(observation, x, y, before_tile)
+                    consumed = []
+                    if decision_refs is not None:
+                        for location, old, new in ((f"unit:{unit_index}", before_inventory, after_inventory),
+                                                   ("shed", before_shed, private["shed"])):
+                            quantity = int(old.get("FERTILIZER", 0)) - int(new.get("FERTILIZER", 0))
+                            if quantity > 0:
+                                consumed.extend(self._take_product(location, "FERTILIZER", quantity))
                     self._emit(
                         LifecycleEventType.FERTILIZED,
                         observation,
@@ -910,6 +1270,7 @@ class FarmLifecycleTracker:
                             "fertilized_until_day": int(
                                 after_tile["fertilized_until_day"]
                             ),
+                            "consumed_allocations": consumed,
                         },
                     )
 
@@ -955,8 +1316,49 @@ class FarmLifecycleTracker:
                         )
                         if closed:
                             self._active_plants.pop((x, y), None)
+                elif "animal" in before_tile:
+                    product = str(game.ANIMALS[before_tile["animal"]]["product"])
+                    harvested = max(
+                        int(after_inventory.get(product, 0))
+                        - int(before_inventory.get(product, 0)),
+                        0,
+                    )
+                    if harvested > 0:
+                        animal_id = self._animal_for_tile(
+                            observation, x, y, before_tile
+                        )
+                        product_lot_id = self._add_product_lot(
+                            product,
+                            harvested,
+                            location=f"unit:{unit_index}",
+                            source_plant_id=None,
+                            source_animal_id=animal_id,
+                        )
+                        unit_price = float(observation["market"]["prices"][product])
+                        self._emit(
+                            LifecycleEventType.HARVESTED,
+                            observation,
+                            token_span=token_span,
+                            animal_id=animal_id,
+                            product_lot_id=product_lot_id,
+                            tile_xy=(x, y),
+                            quantity=harvested,
+                            attributed_value=harvested * unit_price,
+                            normalized_credit=harvested * unit_price / self.reward_scale,
+                            transition_reward=transition_reward,
+                            data={
+                                "unit_index": unit_index,
+                                "animal": before_tile["animal"],
+                                "product": product,
+                                "market_unit_price_at_harvest": unit_price,
+                                "credit_type": "harvest_market_value",
+                            },
+                        )
 
             elif op == "DIG" and isinstance(before_tile, Mapping):
+                if decision_refs is not None and before_tile.get("kind") == "WEED" and after_tile is None:
+                    self._emit(LifecycleEventType.TILE_CLEARED, observation, tile_xy=(x, y),
+                               data={"unit_index": unit_index})
                 if before_tile.get("kind") == "PLANT" and not self._same_plant(
                     before_tile, after_tile
                 ):
@@ -971,6 +1373,123 @@ class FarmLifecycleTracker:
                         tile_xy=(x, y),
                         transition_reward=transition_reward,
                         data={"reason": "DUG", "unit_index": unit_index},
+                    )
+
+            if op in {"BUILD_COOP", "BUILD_PASTURE"} and before_tile is None and isinstance(after_tile, Mapping):
+                kind = after_tile.get("kind")
+                if kind in {"COOP", "PASTURE"}:
+                    self._emit(
+                        LifecycleEventType.STRUCTURE_BUILT,
+                        observation,
+                        token_span=token_span,
+                        tile_xy=(x, y),
+                        data={"unit_index": unit_index, "kind": kind},
+                    )
+
+            if (
+                op == "PLACE"
+                and isinstance(after_tile, Mapping)
+                and "animal" in after_tile
+                and not (isinstance(before_tile, Mapping) and "animal" in before_tile)
+            ):
+                animal = str(after_tile["animal"])
+                pieces = self._take_animal_stock(f"unit:{unit_index}", animal, 1)
+                piece = pieces[0] if pieces else None
+                animal_id = self._next_id("animal")
+                self._active_animals[(x, y)] = animal_id
+                self._animal_identity[animal_id] = (
+                    animal,
+                    int(after_tile["placed_day"]),
+                )
+                extra = set(piece.extra_decisions) if piece is not None else set()
+                self._emit(
+                    LifecycleEventType.ANIMAL_PLACED,
+                    observation,
+                    token_span=token_span,
+                    animal_id=animal_id,
+                    animal_lot_id=piece.lot_id if piece is not None else None,
+                    tile_xy=(x, y),
+                    data={
+                        "unit_index": unit_index,
+                        "animal": animal,
+                        "placed_day": int(after_tile["placed_day"]),
+                        "animal_unit_cost": piece.unit_cost if piece is not None else 0.0,
+                        "purchase_event_id": piece.purchase_event_id if piece is not None else None,
+                        "purchase_decision_id": piece.purchase_decision_id if piece is not None else None,
+                        "extra_decision_ids": sorted(extra),
+                    },
+                )
+
+            if (
+                op == "FEED"
+                and isinstance(before_tile, Mapping)
+                and "animal" in before_tile
+                and isinstance(after_tile, Mapping)
+                and after_tile.get("fed_today")
+                and not before_tile.get("fed_today")
+            ):
+                animal_id = self._animal_for_tile(observation, x, y, before_tile)
+                consumed = self._take_product(f"unit:{unit_index}", "WHEAT", 1)
+                self._emit(
+                    LifecycleEventType.ANIMAL_FED,
+                    observation,
+                    token_span=token_span,
+                    animal_id=animal_id,
+                    tile_xy=(x, y),
+                    data={
+                        "unit_index": unit_index,
+                        "consumed_allocations": consumed,
+                    },
+                )
+
+            if (
+                op == "CARE"
+                and isinstance(before_tile, Mapping)
+                and "animal" in before_tile
+                and isinstance(after_tile, Mapping)
+                and after_tile.get("cared_today")
+                and not before_tile.get("cared_today")
+            ):
+                animal_id = self._animal_for_tile(observation, x, y, before_tile)
+                self._emit(
+                    LifecycleEventType.ANIMAL_CARED,
+                    observation,
+                    token_span=token_span,
+                    animal_id=animal_id,
+                    tile_xy=(x, y),
+                    data={"unit_index": unit_index},
+                )
+
+            if (
+                op == "COLLECT_FERTILIZER"
+                and isinstance(before_tile, Mapping)
+                and before_tile.get("fertilizer_available")
+                and isinstance(after_tile, Mapping)
+                and not after_tile.get("fertilizer_available")
+            ):
+                collected = max(
+                    int(after_inventory.get("FERTILIZER", 0))
+                    - int(before_inventory.get("FERTILIZER", 0)),
+                    0,
+                )
+                if collected > 0:
+                    animal_id = self._animal_for_tile(observation, x, y, before_tile)
+                    product_lot_id = self._add_product_lot(
+                        "FERTILIZER",
+                        collected,
+                        location=f"unit:{unit_index}",
+                        source_plant_id=None,
+                        source_animal_id=animal_id,
+                    )
+                    self._emit(
+                        LifecycleEventType.FERTILIZER_COLLECTED,
+                        observation,
+                        token_span=token_span,
+                        animal_id=animal_id,
+                        product_lot_id=product_lot_id,
+                        tile_xy=(x, y),
+                        quantity=collected,
+                        data={"unit_index": unit_index},
                     )
 
             if op in {"DROP", "PLACE"}:
@@ -989,6 +1508,16 @@ class FarmLifecycleTracker:
                         token_span=token_span,
                         transition_reward=transition_reward,
                     )
+                for animal in game.ANIMALS:
+                    moved = max(
+                        int(private["shed"].get(animal, 0))
+                        - int(before_shed.get(animal, 0)),
+                        0,
+                    )
+                    if moved > 0:
+                        self._move_animal_stock(
+                            f"unit:{unit_index}", "shed", animal, moved, observation
+                        )
             elif op == "PICKUP":
                 for item in game.PRODUCTS:
                     moved = max(
@@ -1005,8 +1534,19 @@ class FarmLifecycleTracker:
                         token_span=token_span,
                         transition_reward=transition_reward,
                     )
+                for animal in game.ANIMALS:
+                    moved = max(
+                        int(after_inventory.get(animal, 0))
+                        - int(before_inventory.get(animal, 0)),
+                        0,
+                    )
+                    if moved > 0:
+                        self._move_animal_stock(
+                            "shed", f"unit:{unit_index}", animal, moved, observation
+                        )
 
         # Unit fazı ekimden önce seed tüketir, market fazı sonra seed ekler.
+        self._decision_id = None
         # Bu denklem aynı turdaki PLANT + BUY_SEED durumunda da gerçek miktardır.
         before_seeds = observation["private"]["seeds"]
         after_seeds = next_observation["private"]["seeds"]
@@ -1112,6 +1652,7 @@ class FarmLifecycleTracker:
                 transition_reward,
             )
 
+        self._decision_id = None
         # Gece yenilemesi veya decay ile kaybolan bitkileri next observation'dan bul.
         for (x, y), plant_id in list(self._active_plants.items()):
             next_tile = next_farm["tiles"][y][x]
@@ -1146,7 +1687,45 @@ class FarmLifecycleTracker:
                 if isinstance(tile, Mapping) and tile.get("kind") == "PLANT":
                     self._plant_for_tile(next_observation, x, y, tile)
 
+        for (x, y), animal_id in list(self._active_animals.items()):
+            next_tile = next_farm["tiles"][y][x]
+            animal, placed_day = self._animal_identity[animal_id]
+            if (
+                isinstance(next_tile, Mapping)
+                and next_tile.get("animal") == animal
+                and int(next_tile.get("placed_day", -1)) == placed_day
+            ):
+                continue
+            self._active_animals.pop((x, y), None)
+            self._emit(
+                LifecycleEventType.ANIMAL_LOST,
+                observation,
+                animal_id=animal_id,
+                tile_xy=(x, y),
+                transition_reward=transition_reward,
+                data={
+                    "animal": animal,
+                    "reason": (
+                        "ESCAPED"
+                        if isinstance(next_tile, Mapping)
+                        and next_tile.get("kind") == game.ANIMALS[animal]["structure"]
+                        and "animal" not in next_tile
+                        else "REMOVED_OR_REPLACED"
+                    ),
+                },
+            )
+
+        for y, row in enumerate(next_farm["tiles"]):
+            for x, tile in enumerate(row):
+                if isinstance(tile, Mapping) and "animal" in tile:
+                    self._animal_for_tile(next_observation, x, y, tile)
+
         self._reconcile_product_inventories(
+            observation,
+            next_observation,
+            transition_reward,
+        )
+        self._reconcile_animal_inventories(
             observation,
             next_observation,
             transition_reward,
@@ -1229,6 +1808,7 @@ class FarmLifecycleTracker:
                 "item": lot.item,
                 "source_plant_id": lot.source_plant_id,
                 "source_purchase_id": lot.source_purchase_id,
+                "source_animal_id": lot.source_animal_id,
                 "unit_cost": lot.unit_cost,
                 "remaining": lot.remaining,
                 "location": lot.location,
@@ -1318,8 +1898,65 @@ class FarmLifecycleTracker:
             if event.event_type is LifecycleEventType.HIRED
         ]
 
+    def animal_lifecycles(self) -> list[dict[str, Any]]:
+        animals: dict[str, dict[str, Any]] = {}
+        for event in self.journal.events:
+            if event.event_type is LifecycleEventType.ANIMAL_PLACED and event.animal_id:
+                animals[event.animal_id] = {
+                    "animal_id": event.animal_id,
+                    "animal": event.data.get("animal"),
+                    "tile_xy": list(event.tile_xy) if event.tile_xy else None,
+                    "placed_step": event.step,
+                    "placed_day": event.data.get("placed_day", event.day),
+                    "animal_unit_cost": float(event.data.get("animal_unit_cost", 0.0)),
+                    "status": "ACTIVE",
+                    "feed_steps": [],
+                    "care_steps": [],
+                    "harvest_events": [],
+                    "fertilizer_events": [],
+                    "harvested_units": 0,
+                    "sold_units": 0,
+                    "estimated_sale_revenue": 0.0,
+                    "event_ids": [event.event_id],
+                }
+                continue
+            if event.animal_id and event.animal_id in animals:
+                animal = animals[event.animal_id]
+                animal["event_ids"].append(event.event_id)
+                if event.event_type is LifecycleEventType.ANIMAL_FED:
+                    animal["feed_steps"].append(event.step)
+                elif event.event_type is LifecycleEventType.ANIMAL_CARED:
+                    animal["care_steps"].append(event.step)
+                elif event.event_type is LifecycleEventType.HARVESTED:
+                    animal["harvest_events"].append(
+                        {
+                            "step": event.step,
+                            "quantity": event.quantity,
+                            "product_lot_id": event.product_lot_id,
+                        }
+                    )
+                    animal["harvested_units"] += int(event.quantity or 0)
+                elif event.event_type is LifecycleEventType.FERTILIZER_COLLECTED:
+                    animal["fertilizer_events"].append(event.step)
+                elif event.event_type is LifecycleEventType.ANIMAL_LOST:
+                    animal["status"] = str(event.data.get("reason", "LOST"))
+            if event.event_type is LifecycleEventType.PRODUCT_SOLD:
+                for allocation in event.data.get("allocations", []):
+                    source = allocation.get("source_animal_id")
+                    if source not in animals:
+                        continue
+                    animal = animals[source]
+                    animal["sold_units"] += int(allocation["quantity"])
+                    animal["estimated_sale_revenue"] += float(
+                        allocation.get("realized_revenue", allocation.get("estimated_revenue", 0.0))
+                    )
+                    if event.event_id not in animal["event_ids"]:
+                        animal["event_ids"].append(event.event_id)
+        return list(animals.values())
+
     def summary(self) -> dict[str, Any]:
         lifecycles = self.plant_lifecycles()
+        animals = self.animal_lifecycles()
         counts = Counter(event.event_type.value for event in self.journal.events)
         return {
             "episode": self.episode_number,
@@ -1328,6 +1965,7 @@ class FarmLifecycleTracker:
             "inventory_attribution": "FIFO",
             "event_count": len(self.journal.events),
             "event_counts": dict(sorted(counts.items())),
+            "animal_count": len(animals),
             "plant_count": len(lifecycles),
             "harvested_plant_count": sum(
                 plant["harvested_units"] > 0 for plant in lifecycles
@@ -1341,12 +1979,22 @@ class FarmLifecycleTracker:
             "total_attributed_sale_revenue": sum(
                 plant["estimated_sale_revenue"] for plant in lifecycles
             ),
+            "harvested_animal_count": sum(
+                animal["harvested_units"] > 0 for animal in animals
+            ),
+            "total_animal_harvested_units": sum(
+                animal["harvested_units"] for animal in animals
+            ),
+            "total_animal_sale_revenue": sum(
+                animal["estimated_sale_revenue"] for animal in animals
+            ),
         }
 
     def write_artifacts(self, episode_directory: Path) -> dict[str, Path]:
         episode_directory.mkdir(parents=True, exist_ok=True)
         events_path = episode_directory / "lifecycle_events.jsonl.gz"
         plants_path = episode_directory / "plant_lifecycles.json"
+        animals_path = episode_directory / "animal_lifecycles.json"
         products_path = episode_directory / "product_lots.json"
         trades_path = episode_directory / "trade_lifecycles.json"
         workers_path = episode_directory / "worker_lifecycles.json"
@@ -1365,6 +2013,7 @@ class FarmLifecycleTracker:
         os.replace(temporary_events, events_path)
 
         self._write_json(plants_path, self.plant_lifecycles())
+        self._write_json(animals_path, self.animal_lifecycles())
         self._write_json(products_path, self.product_lots())
         self._write_json(trades_path, self.trade_lifecycles())
         self._write_json(workers_path, self.worker_lifecycles())
@@ -1372,6 +2021,7 @@ class FarmLifecycleTracker:
         return {
             "events": events_path,
             "plants": plants_path,
+            "animals": animals_path,
             "products": products_path,
             "trades": trades_path,
             "workers": workers_path,

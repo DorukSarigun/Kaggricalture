@@ -198,7 +198,7 @@
   <p>Toplam tile girişi: 11 + 26 = <strong>37 kanal</strong>, şekil <code>(B, 37, 10, 10)</code> değil henüz — kategorikler <code>(B, 3, 10, 10)</code>, sayısallar <code>(B, 26, 10, 10)</code>.</p>
 
   <h3>3.2 İşçi haritası</h3>
-  <p>İki spatial kanal: [0] farmer 1.0 olduğu karede; [1] her hand +1, sonra <code>n / (n + 4)</code> ile sıkıştırılır. Böylece birçok işçi aynı karede doyurur.</p>
+  <p>İki spatial kanal: [0] ana çiftçinin bulunduğu karede 1, diğer karelerde 0; [1] her karedeki kiralık işçi sayısı doğrudan verilir: 0, 1, 2, … Ölçekleme veya sıkıştırma uygulanmaz; ana çiftçi kiralık işçi sayısına dahil edilmez.</p>
 
   <h3>3.3 Unit listesi (decoder için)</h3>
   <p>Sıra oyunla aynı: index 0 farmer, sonrası <code>hands</code>. Her unit için <code>(y, x)</code> ve 14 özellik: <code>is_main_farmer</code> + 13 taşınan item (<code>count / (count + 10)</code>). CNN gather <code>(y, x)</code> ister; oyun koordinatı <code>(x, y)</code> olduğu için çevrilir.</p>

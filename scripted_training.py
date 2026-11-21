@@ -49,7 +49,7 @@ from training import EpisodeRollout
 LOGGER = logging.getLogger("kaggriculture.training")
 
 # v2: SpatialEncoder tek katmanlı 10x10 conv yerine 3x3 residual yığın.
-CHECKPOINT_FORMAT_VERSION = 2
+CHECKPOINT_FORMAT_VERSION = 3
 SCRIPTED_AGENTS = ("starter", "random", "pass")
 OpponentPolicy = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 
@@ -464,6 +464,9 @@ def collect_scripted_episode(
                     "action_log_probability": sample.action_log_prob,
                     "mean_entropy": sample.mean_entropy,
                     "value_prediction": sample.value,
+                    "realized_return_prediction": (
+                        sample.value + reward_config.shaping_beta * shaped.current_potential
+                    ),
                     "reward": asdict(shaped),
                     "lifecycle_events": [
                         {
@@ -601,6 +604,21 @@ def collect_scripted_episode(
     lifecycle_artifacts = lifecycle_tracker.write_artifacts(episode_directory)
     lifecycle_summary = lifecycle_tracker.summary()
     reward_rows = [transition.reward for transition in rollout.transitions]
+    realized_value_rows = []
+    if ppo_config.realized_value_coef > 0:
+        future = 0.0
+        for transition in reversed(rollout.transitions):
+            future = transition.reward.base + reward_config.gamma * future
+            prediction = transition.sample.value + reward_config.shaping_beta * transition.reward.current_potential
+            realized_value_rows.append({
+                "step": transition.environment_step,
+                "realized_return_target": future,
+                "prediction": prediction,
+                "error": prediction - future,
+                "potential_offset": reward_config.shaping_beta * transition.reward.current_potential,
+            })
+        realized_value_rows.reverse()
+        write_json(episode_directory / "realized_value_targets.json", realized_value_rows)
     write_json(episode_directory / "cash_ledger.json", cash_ledger.to_dict())
     summary = {
         "cash_accounting": cash_ledger.summary(learner_player),
@@ -627,6 +645,17 @@ def collect_scripted_episode(
         "won_by_money": final_learner_money > final_opponent_money,
         "environment_reward": float(env.state[learner_player].reward or 0.0),
         "training_reward_sum": float(sum(row.total for row in reward_rows)),
+        "reward_mode": reward_config.mode,
+        "realized_return_mae": (
+            sum(abs(row["error"]) for row in realized_value_rows) / len(realized_value_rows)
+            if realized_value_rows else None
+        ),
+        "realized_value_coef": ppo_config.realized_value_coef,
+        "initial_potential": reward_rows[0].current_potential if reward_rows else 0.0,
+        "discounted_shaping_conservation_error": float(
+            sum(reward_config.gamma ** i * row.shaping for i, row in enumerate(reward_rows))
+            + reward_config.shaping_beta * reward_rows[0].current_potential
+        ) if reward_rows and rollout.transitions[-1].done else None,
         "base_reward_sum": float(sum(row.base for row in reward_rows)),
         "shaping_reward_sum": float(sum(row.shaping for row in reward_rows)),
         "lifecycle_credit_sum": float(
@@ -838,8 +867,9 @@ def load_checkpoint(
         raise ValueError(
             "Desteklenmeyen checkpoint formatı: "
             f"{saved_version}; beklenen={CHECKPOINT_FORMAT_VERSION}. "
-            "v1 checkpoint'leri tek katmanlı 10x10 SpatialEncoder ile "
-            "eğitilmiştir ve residual encoder'a yüklenemez; yeni bir "
+            "v1 SpatialEncoder mimarisi farklıdır. v3 ondalık miktar "
+            "tokenları kullanır; eski token embedding ve "
+            "quantity head ağırlıkları doğrudan yüklenemez. Yeni bir "
             "--run-dir ile sıfırdan eğitim başlatın."
         )
     model.load_state_dict(checkpoint["model_state_dict"], strict=True)
@@ -902,8 +932,10 @@ def environment_reward_config(
     starting_money: float,
     gamma: float,
     shaping_beta: float,
+    mode: str = "terminal",
 ) -> RewardConfig:
     return RewardConfig(
+        mode=mode,
         gamma=gamma,
         shaping_beta=shaping_beta,
         reward_scale=starting_money,

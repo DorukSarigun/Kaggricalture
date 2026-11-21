@@ -6,10 +6,10 @@ eklenir:
 
     F(s, s') = beta * (gamma * Phi(s') - Phi(s))
 
-Terminal state'te Phi=0 kullanılır, dolayısıyla shaping bir episode boyunca
-teleskoplanarak sıfıra yakınsar: optimal politikayı değiştirmez, yalnızca
-krediyi adımlara dağıtır. Ekim, sulama ve ihmal gibi kararlar böylece
-gerçekleştikleri adımda sinyal alır.
+Terminal state'te Phi=0 kullanılır. İskontolu shaping toplamı tam olarak
+-beta * Phi(s0)'dır; sabit başlangıç için politika karşılaştırmasını değiştirmez.
+cash_progress modu gerçek nakit farklarını ve nakit HARİÇ varlık potansiyelini
+kullanır; gamma=1 zorunludur. Terminal para farkı ikinci kez eklenmez.
 
 Gerçekleşmiş üretim kârının aksiyonlara dağıtımı bu dosyada değil
 ``lifecycle_credit.py`` içindedir.
@@ -18,6 +18,7 @@ Gerçekleşmiş üretim kârının aksiyonlara dağıtımı bu dosyada değil
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,11 +42,16 @@ class RewardConfig:
     starting_money: float = 3000.0
     season_days: int = 30
     turns_per_day: int = 24
+    mode: str = "terminal"
 
     def __post_init__(self) -> None:
+        if self.mode not in ("terminal", "cash_progress"):
+            raise ValueError("Bilinmeyen reward mode.")
+        if self.mode == "cash_progress" and self.gamma != 1.0:
+            raise ValueError("cash_progress ekonomik hedefi korumak için gamma=1 gerektirir.")
         if not 0.0 < self.gamma <= 1.0:
             raise ValueError("gamma (0, 1] aralığında olmalı.")
-        if self.shaping_beta < 0.0:
+        if not math.isfinite(self.shaping_beta) or self.shaping_beta < 0.0:
             raise ValueError("shaping_beta negatif olamaz.")
         if self.reward_scale <= 0.0:
             raise ValueError("reward_scale pozitif olmalı.")
@@ -379,12 +385,18 @@ def economic_potential_breakdown(
             if not isinstance(tile, Mapping):
                 continue
             if tile.get("kind") == "PLANT":
-                growing_crops += _crop_tile_value(
+                crop_value = _crop_tile_value(
                     tile,
                     current_day,
                     market,
                     config,
                 )
+                if config.mode == "cash_progress":
+                    # Bunlar ölüm olasılığı değil, açıkça seçilmiş ilerleme
+                    # katsayılarıdır. Hasat edilmemiş ürünü tam nakit sayma.
+                    # WATER no-op ise state değişmez, tekrar bonus oluşmaz.
+                    crop_value *= 0.75 if tile.get("watered_today", False) else 0.5
+                growing_crops += crop_value
             elif "animal" in tile:
                 placed_animals += _animal_tile_value(
                     tile,
@@ -410,7 +422,8 @@ def economic_potential(
     """Başlangıç parasına göre normalize ekonomik potansiyel."""
     config = config or RewardConfig()
     breakdown = economic_potential_breakdown(observation, config)
-    return (breakdown.total - config.starting_money) / config.reward_scale
+    baseline = breakdown.cash if config.mode == "cash_progress" else config.starting_money
+    return (breakdown.total - baseline) / config.reward_scale
 
 
 def terminal_gold_difference_reward(
@@ -447,7 +460,8 @@ def transition_reward(
     config = config or RewardConfig()
     current_breakdown = economic_potential_breakdown(observation, config)
     current_potential = (
-        current_breakdown.total - config.starting_money
+        current_breakdown.total
+        - (current_breakdown.cash if config.mode == "cash_progress" else config.starting_money)
     ) / config.reward_scale
 
     if done:
@@ -456,10 +470,18 @@ def transition_reward(
     else:
         next_breakdown = economic_potential_breakdown(next_observation, config)
         next_potential = (
-            next_breakdown.total - config.starting_money
+            next_breakdown.total
+            - (next_breakdown.cash if config.mode == "cash_progress" else config.starting_money)
         ) / config.reward_scale
 
     base = terminal_gold_difference_reward(next_observation, done, config)
+    if config.mode == "cash_progress":
+        # Yalnız gerçekleşmiş nakit değişimi: alım negatif, satış pozitif.
+        # Aynı terminal farkını tekrar ekleme; tüm adımlar zaten teleskoplanır.
+        base = (
+            terminal_gold_difference_reward(next_observation, True, config)
+            - terminal_gold_difference_reward(observation, True, config)
+        )
     shaping = config.shaping_beta * (
         config.gamma * next_potential - current_potential
     )

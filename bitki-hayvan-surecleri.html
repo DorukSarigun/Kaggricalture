@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kaggriculture — bitki ve hayvan işlem ağaçları</title>
+<style>
+  :root {
+    --bg: #161410;
+    --bg2: #1f1b16;
+    --paper: #26211b;
+    --ink: #f3eadc;
+    --muted: #b7aa96;
+    --line: #3d362c;
+    --accent: #d4a054;
+    --good: #7dba7a;
+    --bad: #c96a5a;
+    --info: #7ea0c4;
+    --auto: #c4a86e;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 var(--sans); }
+  a { color: var(--accent); }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  .wrap { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 100vh; }
+  nav {
+    position: sticky; top: 0; height: 100vh; overflow: auto;
+    padding: 28px 18px; border-right: 1px solid var(--line);
+    background: var(--bg2); font-size: 14px; line-height: 1.35;
+  }
+  nav h1 { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  nav a { display: block; color: var(--ink); text-decoration: none; padding: 4px 0; }
+  nav a:hover { color: var(--accent); }
+  nav .sub { padding-left: 12px; color: var(--muted); }
+  nav .group { margin-top: 16px; color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+  main { min-width: 0; max-width: 1100px; padding: 44px 52px 96px; }
+  h1, h2, h3 { font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; }
+  h1 { font-size: 36px; margin: 0 0 8px; }
+  h2 { font-size: 26px; margin: 52px 0 14px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 20px; margin: 28px 0 10px; }
+  p { margin: 0 0 12px; }
+  .lead { font-size: 20px; color: var(--muted); }
+  .note, .warn {
+    background: var(--paper); border-left: 3px solid var(--accent);
+    padding: 12px 16px; margin: 16px 0; }
+  .warn { border-left-color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 14px 0 22px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 12px;
+    padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--paper); white-space: nowrap;
+  }
+  .chip.market { color: var(--accent); border-color: #6a4e24; }
+  .chip.unit { color: var(--info); border-color: #3a4e62; }
+  .chip.auto { color: var(--auto); border-color: #5a4a28; }
+  .chip.fail { color: var(--bad); border-color: #62362e; }
+  .chip.good { color: var(--good); border-color: #3a5a38; }
+  .toolbar { display: flex; gap: 8px; margin: 10px 0 18px; }
+  button {
+    background: var(--paper); color: var(--ink); border: 1px solid var(--line);
+    padding: 6px 12px; font: 13px var(--sans); cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .tree { list-style: none; margin: 0; padding-left: 18px; }
+  .tree ul { list-style: none; margin: 0; padding-left: 22px; }
+  .tree li { position: relative; padding: 3px 0 3px 16px; }
+  .tree li::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    border-left: 1.5px solid #5a5144;
+  }
+  .tree li::after {
+    content: ""; position: absolute; left: 0; top: 14px; width: 14px;
+    border-top: 1.5px solid #5a5144;
+  }
+  .tree > li::before, .tree > li::after { display: none; }
+  .tree li:last-child::before { height: 14px; bottom: auto; }
+  .node {
+    display: inline-block; max-width: 100%;
+    background: var(--paper); border: 1px solid var(--line);
+    padding: 6px 10px; border-radius: 6px; vertical-align: top;
+  }
+  .node strong { font-family: var(--mono); font-size: 13px; }
+  .node small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .node.market { border-color: #6a4e24; }
+  .node.unit { border-color: #3a4e62; }
+  .node.auto { border-color: #5a4a28; }
+  .node.fail { border-color: #62362e; }
+  .node.good { border-color: #3a5a38; }
+  details.branch { display: inline-block; }
+  details.branch > summary {
+    list-style: none; cursor: pointer; display: inline-block;
+  }
+  details.branch > summary::-webkit-details-marker { display: none; }
+  details.branch > summary .node { padding-right: 22px; }
+  details.branch > summary .node::after {
+    content: "▾"; float: right; margin-left: 10px; color: var(--muted); font-size: 12px;
+  }
+  details.branch:not([open]) > summary .node::after { content: "▸"; }
+  .panel { background: var(--bg2); border: 1px solid var(--line); padding: 16px 18px 12px; margin: 16px 0 28px; overflow-x: auto; }
+  .cap { color: var(--muted); font-size: 13px; margin: -18px 0 28px; }
+  @media (max-width: 860px) {
+    .wrap { display: block; }
+    nav { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { padding: 28px 18px 64px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>İşlem ağaçları</h1>
+  <a href="#ozet">Özet kurallar</a>
+  <div class="group">Bitkiler</div>
+  <a href="#bitki-genel">Ortak bitki ağacı</a>
+  <a class="sub" href="#wheat">Wheat</a>
+  <a class="sub" href="#carrot">Carrot</a>
+  <a class="sub" href="#tomato">Tomato</a>
+  <a class="sub" href="#strawberry">Strawberry</a>
+  <a class="sub" href="#melon">Melon</a>
+  <div class="group">Hayvanlar</div>
+  <a href="#hayvan-genel">Ortak hayvan ağacı</a>
+  <a class="sub" href="#goose">Goose → Egg</a>
+  <a class="sub" href="#cow">Cow → Milk</a>
+  <a class="sub" href="#sheep">Sheep → Wool</a>
+  <a href="#gubre">Gübre yan ürünü</a>
+  <a href="#nakil">Hasattan satışa nakil</a>
+</nav>
+<main>
+  <h1>Bitki ve hayvan süreç ağaçları</h1>
+  <p class="lead">Kaynak: <code>kaggle_environments.envs.kaggriculture</code>. Her dal, tohum/hayvan alımından markette <code>SELL</code>’e (veya kayba) kadar yasal işlemleri gösterir.</p>
+
+  <div class="legend">
+    <span class="chip market">market emri</span>
+    <span class="chip unit">çiftçi / yancı işlemi</span>
+    <span class="chip auto">otomatik (gün sonu / adım)</span>
+    <span class="chip fail">kayıp / çıkmaz</span>
+    <span class="chip good">satış / ürün elde</span>
+  </div>
+  <div class="toolbar">
+    <button type="button" id="expand-all">Tümünü aç</button>
+    <button type="button" id="collapse-all">Tümünü kapat</button>
+  </div>
+
+  <h2 id="ozet">Özet kurallar</h2>
+  <p>Sezon 30 gün × 24 tur = 720 adım. Birim (farmer/hand) bulunduğu karoda işlem yapar. Geçersiz işlem sessiz no-op’tur. Tohumlar <code>private.seeds</code>’tedir; shed’e girmez. Satış yalnız shed’den yapılır. Gün sonunda envanter shed’e düşer (kapasite 100; fazlası yok olur), yancılar silinir, çiftçi shed köşesine döner.</p>
+  <div class="warn">
+    Ekim günü bitki <code>consecutive_unwatered = 1</code> ile başlar. O gün <code>WATER</code> yoksa gece ot olur. Hayvan ilk aç günü yaşar; ikinci ardışık aç gecede kaçar, yapı kalır.
+  </div>
+  <table>
+    <thead>
+      <tr><th>Varlık</th><th>Alım</th><th>İlk ürün</th><th>Ritim</th><th>Tavan</th><th>Satılan ürün</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Wheat</td><td>tohum $10</td><td>yaş 2</td><td>tek hasat; su bonusu yaş 2–4</td><td>6 (gübresiz 4)</td><td>WHEAT</td></tr>
+      <tr><td>Carrot</td><td>tohum $20</td><td>yaş 2</td><td>tek hasat; su bonusu yaş 2–3</td><td>4 (gübresiz 3)</td><td>CARROT</td></tr>
+      <tr><td>Tomato</td><td>tohum $50</td><td>yaş 8</td><td>her gün, 4 kez (8–11)</td><td>4 birikimli</td><td>TOMATO</td></tr>
+      <tr><td>Strawberry</td><td>tohum $100</td><td>yaş 10</td><td>gün aşırı, 4 kez (10,12,14,16)</td><td>4 birikimli</td><td>STRAWBERRY</td></tr>
+      <tr><td>Melon</td><td>tohum $80</td><td>yaş 10</td><td>tek hasat; su bonusu yaş 6–12</td><td>6</td><td>MELON</td></tr>
+      <tr><td>Goose</td><td>hayvan $300 + COOP</td><td>yerleşim+4</td><td>her gün</td><td>tile’da 4</td><td>EGG</td></tr>
+      <tr><td>Cow</td><td>hayvan $400 + PASTURE</td><td>yerleşim+8</td><td>2 günde bir</td><td>tile’da 6</td><td>MILK</td></tr>
+      <tr><td>Sheep</td><td>hayvan $500 + PASTURE</td><td>yerleşim+6</td><td>3 günde bir</td><td>tile’da 6</td><td>WOOL</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="bitki-genel">Ortak bitki ağacı</h2>
+  <p>Beş bitki aynı iskeleti paylaşır. Tek seferlik (Wheat, Carrot, Melon) hasatta karoyu boşaltır. Sürekli (Tomato, Strawberry) hasatta yerinde kalır, sonra çürüyüp ota döner.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node market"><strong>BUY_SEED &lt;crop&gt; &lt;n&gt;</strong><small>Piyasa emri. Fiyat sabit tohum fiyatıdır, dinamik piyasa değil. Tohum private.seeds’e gider.</small></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>hareket + PLANT &lt;crop&gt;</strong><small>Boş, kilitli olmayan karo. O turdaki tüm PLANT talebi tohumu aşıyorsa o üründe bütün ekimler PASS olur.</small></div></summary>
+                <ul>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit"><strong>WATER</strong><small>Günde bir kez. Ekim günü zorunlu sayılır. İki ardışık susuz gece → WEED.</small></div></summary>
+                      <ul>
+                        <li><div class="node auto"><strong>tek seferlik: su bonusu</strong><small>Yaş penceresinde +1, gübreliyse +2, max_yield tavanı.</small></div></li>
+                        <li><div class="node auto"><strong>sürekli: gece üretim</strong><small>WATER doğrudan birim eklemez. Gece, sulandıysa ve takvim günüyse +1 / gübreli +2.</small></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                  <li>
+                    <details class="branch">
+                      <summary><div class="node unit"><strong>FERTILIZE</strong><small>Envanterden 1 FERTILIZER. Aktif günler: bugün, +1, +2.</small></div></summary>
+                      <ul>
+                        <li><div class="node"><strong>gübre kaynağı</strong><small>BUY_PRODUCT FERTILIZER veya hayvandan COLLECT_FERTILIZER.</small></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit good"><strong>HARVEST</strong><small>yield_units &gt; 0 ve yaş ≥ first_yield_day. Ürün birim envanterine yazılır.</small></div></summary>
+                      <ul>
+                        <li><div class="node auto"><strong>tek seferlik</strong><small>Karo None olur. Bitki biter.</small></div></li>
+                        <li><div class="node auto"><strong>sürekli</strong><small>Karo kalır, yield sıfırlanır; sonraki üretim geceleri tekrar dolar.</small></div></li>
+                        <li><div class="node good"><strong>→ nakil ve SELL</strong><small>Aşağıdaki ortak satış ağacı.</small></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                  <li>
+                    <details class="branch">
+                      <summary><div class="node fail"><strong>kayıp uçları</strong></div></summary>
+                      <ul>
+                        <li><div class="node fail"><strong>2 gece susuz → WEED</strong><small>Sonra DIG ile boşaltılır; ürün yok.</small></div></li>
+                        <li><div class="node fail"><strong>DIG</strong><small>Bitkiyi hemen siler.</small></div></li>
+                        <li><div class="node fail"><strong>ömür / çürüme</strong><small>max_lifespan_step sonrası her 2 adımda yield −1; 0 olunca WEED.</small></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+  <p class="cap">Yaş = gün − planted_day. Ekim günü yaş 0’dır.</p>
+
+  <h3 id="wheat">Wheat — tek hasat, yem ve satılık</h3>
+  <p>Tohum $10, ilk hasat yaş 2, su bonusu yaş 2–4, tavan 6. Ekimde 1 birim vardır. Gübresiz sulama tavanı 4; 6 için gübre gerekir. Hasat karoyu boşaltır. Wheat ayrıca hayvan <code>FEED</code> yemidir ve piyasadan <code>BUY_PRODUCT WHEAT</code> ile de alınır.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node market"><strong>BUY_SEED WHEAT n</strong><small>$10 / tohum → seeds</small></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>PLANT WHEAT</strong><small>boş karo; yield=1, unwatered=1</small></div></summary>
+                <ul>
+                  <li><div class="node unit"><strong>WATER (yaş 0 veya 1)</strong><small>Bonus yok; ot olmayı önler.</small></div></li>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit"><strong>WATER yaş 2, 3, 4</strong><small>Her seferinde +1, gübreli +2, tavan 6</small></div></summary>
+                      <ul>
+                        <li><div class="node unit"><strong>FERTILIZE</strong><small>isteğe bağlı; 3 gün aktif</small></div></li>
+                        <li>
+                          <details class="branch" open>
+                            <summary><div class="node unit good"><strong>HARVEST ≥ yaş 2</strong><small>WHEAT birim envanterine; karo boş</small></div></summary>
+                            <ul>
+                              <li><div class="node good"><strong>DROP / PLACE / gün sonu → shed → SELL WHEAT</strong></div></li>
+                              <li><div class="node unit"><strong>veya FEED</strong><small>1 WHEAT, hayvan karesinde; satılmaz, hayvana gider</small></div></li>
+                            </ul>
+                          </details>
+                        </li>
+                      </ul>
+                    </details>
+                  </li>
+                  <li><div class="node fail"><strong>susuz / DIG / çürüme → WEED</strong></div></li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+      <li>
+        <details class="branch">
+          <summary><div class="node market"><strong>alternatif: BUY_PRODUCT WHEAT n</strong><small>Dinamik fiyat. Shed’e gelir, ekilmez; yem veya SELL için.</small></div></summary>
+          <ul>
+            <li><div class="node unit"><strong>PICKUP WHEAT → FEED</strong></div></li>
+            <li><div class="node good"><strong>SELL WHEAT</strong><small>Aynı tur al-sat, fiyat kurgusu net sıfır olacak şekilde alım kotası verilir.</small></div></li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="carrot">Carrot — tek hasat</h3>
+  <p>Tohum $20, ilk hasat yaş 2, su bonusu yaş 2–3, tavan 4 (gübresiz 3). Hasat karoyu boşaltır.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node market"><strong>BUY_SEED CARROT n</strong><small>$20 / tohum</small></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>PLANT CARROT</strong><small>yield=1</small></div></summary>
+                <ul>
+                  <li><div class="node unit"><strong>WATER yaş 0–1</strong><small>hayatta kalma</small></div></li>
+                  <li><div class="node unit"><strong>WATER yaş 2–3</strong><small>+1 / gübreli +2, tavan 4</small></div></li>
+                  <li><div class="node unit"><strong>FERTILIZE</strong></div></li>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit good"><strong>HARVEST ≥ yaş 2</strong><small>CARROT; karo boş</small></div></summary>
+                      <ul><li><div class="node good"><strong>shed → SELL CARROT</strong></div></li></ul>
+                    </details>
+                  </li>
+                  <li><div class="node fail"><strong>susuz / DIG / çürüme → WEED</strong></div></li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="tomato">Tomato — 4 kez günlük üretim</h3>
+  <p>Tohum $50. Ekimde yield=0. <code>WATER</code> doğrudan birim eklemez. Gece, sulandıysa yaş 8, 9, 10, 11’de +1 (gübreli +2, tavan 4). 4. üretimden sonra ömür saati kurulur, çürüyünce ot olur. Hasat bitkiyi silmez.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node market"><strong>BUY_SEED TOMATO n</strong><small>$50 / tohum</small></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>PLANT TOMATO</strong></div></summary>
+                <ul>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit"><strong>her gün WATER</strong><small>iki kaçırma yasak</small></div></summary>
+                      <ul>
+                        <li><div class="node unit"><strong>FERTILIZE</strong><small>yalnız o gece sulandıysa üretim bonusuna girer</small></div></li>
+                        <li><div class="node auto"><strong>gece üretim yaş 8–11</strong><small>+1 veya +2; birikim tavanı 4</small></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit good"><strong>HARVEST (tekrarlı)</strong><small>yaş ≥ 8 ve yield &gt; 0; bitki kalır</small></div></summary>
+                      <ul>
+                        <li><div class="node good"><strong>TOMATO → shed → SELL TOMATO</strong></div></li>
+                        <li><div class="node auto"><strong>sonraki gece yeniden dolar</strong></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                  <li><div class="node fail"><strong>4. üretim sonrası çürüme → WEED</strong></div></li>
+                  <li><div class="node fail"><strong>susuz / DIG → WEED veya boş</strong></div></li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="strawberry">Strawberry — 4 kez gün aşırı</h3>
+  <p>Tohum $100. Gece üretim yaşları 10, 12, 14, 16. Diğer kurallar Tomato ile aynı (WATER üretim eklemez, hasat yerinde bırakır).</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node market"><strong>BUY_SEED STRAWBERRY n</strong><small>$100 / tohum</small></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>PLANT STRAWBERRY</strong></div></summary>
+                <ul>
+                  <li><div class="node unit"><strong>WATER her gün</strong></div></li>
+                  <li><div class="node unit"><strong>FERTILIZE</strong></div></li>
+                  <li><div class="node auto"><strong>gece üretim 10 / 12 / 14 / 16</strong></div></li>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit good"><strong>HARVEST (tekrarlı)</strong><small>yaş ≥ 10</small></div></summary>
+                      <ul><li><div class="node good"><strong>STRAWBERRY → shed → SELL</strong></div></li></ul>
+                    </details>
+                  </li>
+                  <li><div class="node fail"><strong>16’dan sonra çürüme / susuz / DIG</strong></div></li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="melon">Melon — tek hasat, uzun pencere</h3>
+  <p>Tohum $80, ilk hasat yaş 10. Ekimde 1 birim. Su bonusu yaş 6–12 (+1 / gübreli +2), tavan 6. Motor <code>max_yield_day=12</code>; gübresiz tavan genelde yaş 10 civarında dolar. Hasat karoyu boşaltır.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node market"><strong>BUY_SEED MELON n</strong><small>$80 / tohum</small></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>PLANT MELON</strong><small>yield=1</small></div></summary>
+                <ul>
+                  <li><div class="node unit"><strong>WATER yaş 0–5</strong><small>hayatta kalma; bonus yok</small></div></li>
+                  <li><div class="node unit"><strong>WATER yaş 6–12</strong><small>bonus penceresi</small></div></li>
+                  <li><div class="node unit"><strong>FERTILIZE</strong></div></li>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit good"><strong>HARVEST ≥ yaş 10</strong><small>MELON; karo boş</small></div></summary>
+                      <ul><li><div class="node good"><strong>shed → SELL MELON</strong></div></li></ul>
+                    </details>
+                  </li>
+                  <li><div class="node fail"><strong>erken hasat no-op</strong><small>yaş &lt; 10 ise ürün alınmaz</small></div></li>
+                  <li><div class="node fail"><strong>susuz / DIG / çürüme → WEED</strong></div></li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h2 id="hayvan-genel">Ortak hayvan ağacı</h2>
+  <p>Hayvan shed’e alınır, yapıya <code>PLACE</code> edilir, her gün <code>FEED</code> (1 Wheat) ister. Ürün tile’da birikir; <code>HARVEST</code> hayvanı silmez. <code>DIG</code> dolu yapıyı silemez. İkinci ardışık aç gece hayvan kaçar, boş COOP/PASTURE kalır.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node unit"><strong>BUILD_COOP veya BUILD_PASTURE</strong><small>Boş kilitli olmayan karo. Yapı hayvansız durabilir.</small></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node market"><strong>BUY_ANIMAL &lt;GOOSE|COW|SHEEP&gt; n</strong><small>Sabit maliyet. Shed’e gider (kapasite 100).</small></div></summary>
+                <ul>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit"><strong>PICKUP hayvan + PLACE hayvan</strong><small>Eşleşen boş yapı: Goose→COOP, Cow/Sheep→PASTURE.</small></div></summary>
+                      <ul>
+                        <li>
+                          <details class="branch" open>
+                            <summary><div class="node unit"><strong>FEED</strong><small>Günde bir; 1 WHEAT envanterden. Yem: hasat veya BUY_PRODUCT WHEAT.</small></div></summary>
+                            <ul>
+                              <li><div class="node auto"><strong>gece: consecutive_unfed = 0</strong></div></li>
+                              <li><div class="node auto"><strong>üretim günü +1</strong><small>takvim tutuyorsa; tavan max_held</small></div></li>
+                            </ul>
+                          </details>
+                        </li>
+                        <li>
+                          <details class="branch" open>
+                            <summary><div class="node unit"><strong>CARE</strong><small>Günde bir. Gece hem CARE hem FEED varsa pending_care_bonus +1.</small></div></summary>
+                            <ul>
+                              <li><div class="node auto"><strong>bonus</strong><small>Yalnız yemli üretim gecesinde harcanır; yield’e eklenir.</small></div></li>
+                            </ul>
+                          </details>
+                        </li>
+                        <li>
+                          <details class="branch" open>
+                            <summary><div class="node unit good"><strong>HARVEST</strong><small>yield_units &gt; 0. Ürün (EGG/MILK/WOOL) envantere; hayvan kalır.</small></div></summary>
+                            <ul>
+                              <li><div class="node good"><strong>shed → SELL ürün</strong></div></li>
+                            </ul>
+                          </details>
+                        </li>
+                        <li>
+                          <details class="branch">
+                            <summary><div class="node unit"><strong>COLLECT_FERTILIZER</strong><small>Her sağ kalan gecede flag True olur; birikmez. Alınmazsa ertesi gece yenilenir, stoklanmaz.</small></div></summary>
+                            <ul>
+                              <li><div class="node"><strong>FERTILIZER → bitkiye FERTILIZE veya SELL</strong></div></li>
+                            </ul>
+                          </details>
+                        </li>
+                        <li>
+                          <details class="branch">
+                            <summary><div class="node fail"><strong>kaçış / çıkmaz</strong></div></summary>
+                            <ul>
+                              <li><div class="node fail"><strong>2 gece FEED yok → hayvan gider</strong><small>Yapı boş kalır; yeniden PLACE edilebilir.</small></div></li>
+                              <li><div class="node fail"><strong>DIG hayvanlı karoda no-op</strong></div></li>
+                              <li><div class="node fail"><strong>hasat etmeden max_held</strong><small>Fazla üretim yazılmaz.</small></div></li>
+                            </ul>
+                          </details>
+                        </li>
+                      </ul>
+                    </details>
+                  </li>
+                </ul>
+              </details>
+            </li>
+            <li><div class="node fail"><strong>DIG boş yapı</strong><small>Hayvansız COOP/PASTURE silinir.</small></div></li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="goose">Goose → Egg</h3>
+  <p>$300, <code>BUILD_COOP</code>, ilk yumurta yerleşimden 4 gün sonra, her gün +1, tile tavanı 4.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node unit"><strong>BUILD_COOP</strong></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node market"><strong>BUY_ANIMAL GOOSE n</strong><small>$300, shed</small></div></summary>
+                <ul>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit"><strong>PICKUP GOOSE → PLACE GOOSE</strong><small>boş COOP</small></div></summary>
+                      <ul>
+                        <li><div class="node unit"><strong>FEED</strong><small>1 WHEAT / gün</small></div></li>
+                        <li><div class="node unit"><strong>CARE</strong><small>isteğe bağlı bonus</small></div></li>
+                        <li><div class="node auto"><strong>gece üretim yaş ≥ 4, her gün</strong></div></li>
+                        <li>
+                          <details class="branch" open>
+                            <summary><div class="node unit good"><strong>HARVEST → EGG</strong></div></summary>
+                            <ul><li><div class="node good"><strong>shed → SELL EGG</strong></div></li></ul>
+                          </details>
+                        </li>
+                        <li><div class="node unit"><strong>COLLECT_FERTILIZER</strong></div></li>
+                        <li><div class="node fail"><strong>2 gün aç → kaçış, COOP kalır</strong></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="cow">Cow → Milk</h3>
+  <p>$400, <code>BUILD_PASTURE</code>, ilk süt yerleşim+8, sonra 2 günde bir +1, tile tavanı 6. Aynı meraya Sheep de konur; aynı anda tek hayvan.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node unit"><strong>BUILD_PASTURE</strong></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node market"><strong>BUY_ANIMAL COW n</strong><small>$400</small></div></summary>
+                <ul>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit"><strong>PICKUP COW → PLACE COW</strong></div></summary>
+                      <ul>
+                        <li><div class="node unit"><strong>FEED / CARE</strong></div></li>
+                        <li><div class="node auto"><strong>üretim yaş 8, 10, 12, …</strong></div></li>
+                        <li>
+                          <details class="branch" open>
+                            <summary><div class="node unit good"><strong>HARVEST → MILK</strong></div></summary>
+                            <ul><li><div class="node good"><strong>shed → SELL MILK</strong></div></li></ul>
+                          </details>
+                        </li>
+                        <li><div class="node unit"><strong>COLLECT_FERTILIZER</strong></div></li>
+                        <li><div class="node fail"><strong>2 gün aç → kaçış, PASTURE kalır</strong></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h3 id="sheep">Sheep → Wool</h3>
+  <p>$500, <code>BUILD_PASTURE</code>, ilk yün yerleşim+6, sonra 3 günde bir +1, tile tavanı 6.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node unit"><strong>BUILD_PASTURE</strong></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node market"><strong>BUY_ANIMAL SHEEP n</strong><small>$500</small></div></summary>
+                <ul>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node unit"><strong>PICKUP SHEEP → PLACE SHEEP</strong></div></summary>
+                      <ul>
+                        <li><div class="node unit"><strong>FEED / CARE</strong></div></li>
+                        <li><div class="node auto"><strong>üretim yaş 6, 9, 12, …</strong></div></li>
+                        <li>
+                          <details class="branch" open>
+                            <summary><div class="node unit good"><strong>HARVEST → WOOL</strong></div></summary>
+                            <ul><li><div class="node good"><strong>shed → SELL WOOL</strong></div></li></ul>
+                          </details>
+                        </li>
+                        <li><div class="node unit"><strong>COLLECT_FERTILIZER</strong></div></li>
+                        <li><div class="node fail"><strong>2 gün aç → kaçış, PASTURE kalır</strong></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h2 id="gubre">Gübre yan ürünü</h2>
+  <p>Gübre satılabilir ürün ve bitki girdisidir. Piyasadan yalnız Wheat ve Fertilizer <code>BUY_PRODUCT</code> ile alınır.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node"><strong>kaynak</strong></div></summary>
+          <ul>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>COLLECT_FERTILIZER</strong><small>hayvanlı kare; gece flag açılır</small></div></summary>
+                <ul>
+                  <li><div class="node unit"><strong>FERTILIZE</strong><small>bitki karesinde 1 gübre yakılır</small></div></li>
+                  <li><div class="node good"><strong>shed → SELL FERTILIZER</strong></div></li>
+                </ul>
+              </details>
+            </li>
+            <li>
+              <details class="branch">
+                <summary><div class="node market"><strong>BUY_PRODUCT FERTILIZER n</strong><small>dinamik fiyat → shed</small></div></summary>
+                <ul>
+                  <li><div class="node unit"><strong>PICKUP → FERTILIZE</strong></div></li>
+                  <li><div class="node good"><strong>SELL FERTILIZER</strong></div></li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <h2 id="nakil">Hasattan satışa ortak nakil</h2>
+  <p>Çiftçi/yancı envanterindeki hiçbir ürün doğrudan satılmaz. Shed şarttır. Gün sonunda otomatik DROP vardır; kapasite doluysa fazlası yok olur.</p>
+  <div class="panel">
+    <ul class="tree">
+      <li>
+        <details class="branch" open>
+          <summary><div class="node unit good"><strong>HARVEST</strong><small>ürün birim envanterinde</small></div></summary>
+          <ul>
+            <li><div class="node unit"><strong>NORTH / SOUTH / EAST / WEST</strong><small>shed’e komşu 4 iç köşeye yürü</small></div></li>
+            <li>
+              <details class="branch" open>
+                <summary><div class="node unit"><strong>DROP veya PLACE &lt;item&gt; n</strong><small>shed’e komşuyken. DROP hepsini atar.</small></div></summary>
+                <ul>
+                  <li>
+                    <details class="branch" open>
+                      <summary><div class="node market good"><strong>SELL &lt;item&gt; n</strong><small>Birim birim, anlık fiyattan. $1 satış stoğu artırmaz.</small></div></summary>
+                      <ul>
+                        <li><div class="node good"><strong>nakit += fiyat</strong></div></li>
+                      </ul>
+                    </details>
+                  </li>
+                  <li><div class="node unit"><strong>PICKUP</strong><small>geri alma; yem veya gübrelemek için</small></div></li>
+                </ul>
+              </details>
+            </li>
+            <li><div class="node auto"><strong>gün sonu otomatik DROP</strong><small>yancılar da dahil; overflow yok</small></div></li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </div>
+
+  <div class="note">
+    Birim hareketleri (<code>NORTH SOUTH EAST WEST PASS</code>) her ağacın her adımında ara dal olabilir; yasal kareye basmadan tile işlemi no-op’tur. Market emirleri aynı turda, birim işlemlerinden sonra, en fazla 10 sipariş işlenir.
+  </div>
+</main>
+</div>
+<script>
+  const all = () => document.querySelectorAll("details.branch");
+  document.getElementById("expand-all").onclick = () => all().forEach(d => d.open = true);
+  document.getElementById("collapse-all").onclick = () => all().forEach(d => d.open = false);
+</script>
+</body>
+</html>

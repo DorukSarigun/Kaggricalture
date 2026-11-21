@@ -29,7 +29,7 @@ UNIT_FEATURE_NAMES = (
 
 
 def encode_worker_positions(farm: Mapping[str, Any]) -> np.ndarray:
-    """Ana farmer ve hand konumlarını iki spatial kanala çevirir."""
+    """Kanallar: ana farmer için 0/1, her karedeki hand sayısı (ölçeksiz)."""
     tile_rows = farm["tiles"]
     height = len(tile_rows)
     width = len(tile_rows[0])
@@ -41,7 +41,6 @@ def encode_worker_positions(farm: Mapping[str, Any]) -> np.ndarray:
     for hand_x, hand_y in farm["hands"]:
         positions[1, hand_y, hand_x] += 1.0
 
-    positions[1] = positions[1] / (positions[1] + 4.0)
     return positions
 
 

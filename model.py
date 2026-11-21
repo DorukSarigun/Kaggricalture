@@ -462,7 +462,7 @@ class CategorizedActionHeads(nn.Module):
         ):
             raise ValueError("Bilinmeyen action head type id kullanıldı.")
 
-        # Global 49-token arayüzünü koruyoruz. Her kategorinin local logitleri
+        # Global token arayüzünde her kategorinin local logitleri
         # yalnızca kendi global token kolonlarına scatter edilir. Grammar maskesi
         # aynı kategorideki observation'a özel geçersiz seçenekleri eleyebilir.
         global_logits = hidden_states.new_zeros(

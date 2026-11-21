@@ -110,7 +110,7 @@ def _add_lifecycle_credit_arguments(parser: argparse.ArgumentParser) -> None:
             "korunumlu semantik action span'larına ayırır; causal_chain eski "
             "token-level split-credit v2 yoludur; off krediyi kapatır; "
             "harvest_value hasat değerini global reward'a ekler; "
-            "economic_span için shaping_beta 0 olmalıdır."
+            "terminal modunda economic_span için shaping_beta 0 olmalıdır."
         ),
     )
     parser.add_argument(
@@ -182,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--entropy-full-start", type=float, default=0.012)
     train.add_argument("--entropy-full-end", type=float, default=0.005)
     train.add_argument("--entropy-full-decay-episodes", type=int, default=3000)
-    train.add_argument("--target-kl", type=float, default=0.015)
+    train.add_argument("--target-kl", type=float, default=0.020)
     train.add_argument(
         "--kl-skip-multiplier",
         type=float,
@@ -236,13 +236,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.0,
         help=(
-            "Ekonomik potential shaping katsayısı. economic_span v1 çift "
-            "sayımı engellemek için yalnızca 0 kabul eder."
+            "Ekonomik potential shaping katsayısı; cash_progress modunda "
+            "nakit hariç varlıkların ilerleme kredisi."
         ),
     )
+    train.add_argument("--reward-mode", choices=("terminal", "cash_progress"), default="terminal")
+    train.add_argument("--realized-value-coef", type=float, default=0.0,
+                       help="Critic için gerçek base getirisinin Monte Carlo yardımcı loss katsayısı.")
     train.add_argument("--checkpoint-every", type=int, default=10)
     train.add_argument("--run-dir", type=Path)
     train.add_argument("--resume", action="store_true")
+    train.add_argument("--override-kl-on-resume", action="store_true",
+                       help="Resume sırasında yalnız target-kl değişimine açık izin verir; değişiklik event'e yazılır.")
     train.add_argument(
         "--initialize-from-checkpoint",
         type=Path,
@@ -353,6 +358,7 @@ def _ppo_config(args: argparse.Namespace) -> PPOConfig:
         args.lifecycle_credit_mode == LifecycleCreditMode.ECONOMIC_SPAN.value
     )
     return PPOConfig(
+        realized_value_coef=args.realized_value_coef,
         gamma=args.gamma,
         gae_lambda=args.gae_lambda,
         clip_ratio=args.clip_ratio,
@@ -385,6 +391,9 @@ def _validate_resume_configuration(
     checkpoint: dict,
 ) -> None:
     saved = checkpoint.get("run_configuration", {})
+    for field, default in (("reward_mode", "terminal"), ("realized_value_coef", 0.0)):
+        if saved.get(field, default) != getattr(args, field):
+            raise ValueError(f"Resume {field} değişimini kabul etmez; yeni run başlatın.")
     fixed_fields = (
         "opponent",
         "episode_steps",
@@ -433,6 +442,8 @@ def _validate_resume_configuration(
     )
     mismatches = []
     for field in fixed_fields:
+        if field == "target_kl" and getattr(args, "override_kl_on_resume", False):
+            continue
         if field in saved and saved[field] != getattr(args, field):
             mismatches.append(
                 f"{field}: checkpoint={saved[field]!r}, CLI={getattr(args, field)!r}"
@@ -543,7 +554,12 @@ def train(args: argparse.Namespace) -> int:
         args.lifecycle_credit_mode == LifecycleCreditMode.ECONOMIC_SPAN.value
     )
     validate_terminal_actor_safety(_ppo_config(args))
-    if economic_span_enabled and not np.isclose(args.shaping_beta, 0.0):
+    if args.reward_mode == "cash_progress":
+        if args.gamma != 1.0:
+            raise ValueError("cash_progress için --gamma 1 gerekli.")
+        if args.span_policy_coef != 0 or args.lifecycle_credit_mode not in ("economic_span", "off"):
+            raise ValueError("cash_progress yalnız audit/off lifecycle ve --span-policy-coef 0 kabul eder.")
+    if economic_span_enabled and args.reward_mode == "terminal" and not np.isclose(args.shaping_beta, 0.0):
         raise ValueError(
             "economic_span v1 realized krediyle potential değerini iki kez "
             "saymamak için --shaping-beta 0 gerektirir."
@@ -630,6 +646,7 @@ def train(args: argparse.Namespace) -> int:
         starting_money=args.starting_money,
         gamma=args.gamma,
         shaping_beta=args.shaping_beta,
+        mode=args.reward_mode,
     )
     environment_configuration = _environment_configuration(args)
     model = KaggricultureActorCritic().to(device)
@@ -690,6 +707,18 @@ def train(args: argparse.Namespace) -> int:
         )
         _validate_resume_configuration(args, checkpoint)
         saved_run_configuration = checkpoint.get("run_configuration", {})
+        previous_kl = saved_run_configuration.get("target_kl")
+        if previous_kl is not None and previous_kl != args.target_kl:
+            append_jsonl(run_directory / "events.jsonl", {
+                "event": "kl_threshold_override",
+                "time": datetime.now().astimezone().isoformat(),
+                "checkpoint": str(checkpoint_path),
+                "checkpoint_episode": int(checkpoint["episode"]),
+                "old_target_kl": previous_kl,
+                "new_target_kl": args.target_kl,
+                "new_skip_threshold": args.target_kl * args.kl_skip_multiplier,
+            })
+            LOGGER.info("Resume KL hedefi değişti: %.4f -> %.4f", previous_kl, args.target_kl)
         for metadata_field in ("initialize_from_checkpoint", "initial_model"):
             if metadata_field in saved_run_configuration:
                 run_configuration[metadata_field] = saved_run_configuration[
@@ -978,7 +1007,7 @@ def train(args: argparse.Namespace) -> int:
         append_jsonl(metrics_path, update_event)
         LOGGER.info(
             "Update %d | records=%d mb=%d/%d ep=%d/%d loss=%.5f policy=%.5f "
-            "local_span=%.5f value=%.5f "
+            "local_span=%.5f value=%.5f realized_value=%.5f "
             "entropy=%.4f coef=%.4f Hn[unit=%.3f market=%.3f item=%.3f qty=%.3f] "
             "KL=%.6f KLspan[u=%.6f m=%.6f p=%.6f f=%.6f t=%.6f h=%.6f] "
             "KLhead[u=%.6f m=%.6f i=%.6f q=%.6f] grad=%.4f%s",
@@ -992,6 +1021,7 @@ def train(args: argparse.Namespace) -> int:
             update_metrics.policy_loss,
             update_metrics.lifecycle_policy_loss,
             update_metrics.value_loss,
+            update_metrics.realized_value_loss,
             update_metrics.entropy,
             update_entropy_coefficient,
             normalized_head_entropy.get("unit_operation", 0.0),
@@ -1099,6 +1129,7 @@ def evaluate(args: argparse.Namespace) -> int:
         starting_money=args.starting_money,
         gamma=gamma,
         shaping_beta=shaping_beta,
+        mode=checkpoint_config.get("reward", {}).get("mode", "terminal"),
     )
     lifecycle_credit_config = LifecycleCreditConfig(
         mode=LifecycleCreditMode(args.lifecycle_credit_mode),

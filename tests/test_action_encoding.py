@@ -35,8 +35,8 @@ class ActionEncodingTests(unittest.TestCase):
     def test_initial_mask_and_vocab(self) -> None:
         grammar = ActionGrammar(make_observation())
         self.assertEqual(grammar.valid_tokens(), (ActionToken.BOS,))
-        self.assertEqual(ACTION_VOCAB_SIZE, 49)
-        self.assertEqual(grammar.valid_token_mask().shape, (49,))
+        self.assertEqual(ACTION_VOCAB_SIZE, 55)
+        self.assertEqual(grammar.valid_token_mask().shape, (55,))
         self.assertEqual(grammar.valid_token_mask().dtype, np.bool_)
 
     def test_output_head_categories_are_complete_and_disjoint(self) -> None:
@@ -133,7 +133,7 @@ class ActionEncodingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             grammar.push(ActionToken.UNIT_PLANT)
 
-    def test_all_is_canonical_for_non_bucket_quantity(self) -> None:
+    def test_decimal_quantity_is_canonical(self) -> None:
         observation = make_observation()
         observation["private"]["shed"]["WHEAT"] = 7
         action = {
@@ -145,10 +145,44 @@ class ActionEncodingTests(unittest.TestCase):
         token_ids = encode_action_tokens(action, observation)
         tokens = [ID_TO_TOKEN[int(token_id)] for token_id in token_ids]
 
-        self.assertIn(ActionToken.QTY_ALL, tokens)
+        self.assertIn(ActionToken.QTY_7, tokens)
+        self.assertIn(ActionToken.END_QUANTITY, tokens)
         self.assertEqual(decode_action_tokens(token_ids, observation), action)
 
-    def test_non_representable_quantity_is_rejected(self) -> None:
+    def test_every_affordable_seed_quantity_round_trips(self) -> None:
+        observation = make_observation()
+        observation["farms"][0]["money"] = 137 * game.CROPS["WHEAT"]["seed"]
+        for quantity in range(1, 138):
+            with self.subTest(quantity=quantity):
+                action = {"farmer": ["PASS"], "hands": [],
+                          "market": [["BUY_SEED", "WHEAT", quantity]]}
+                tokens = encode_action_tokens(action, observation)
+                self.assertEqual(decode_action_tokens(tokens, observation), action)
+
+    def test_quantity_prefix_mask_and_remaining_budget(self) -> None:
+        observation = make_observation()
+        observation["farms"][0]["money"] = 100
+        grammar = ActionGrammar(observation)
+        for token in (ActionToken.BOS, ActionToken.FARMER, ActionToken.UNIT_PASS,
+                      ActionToken.END_ACTION, ActionToken.MARKET,
+                      ActionToken.MARKET_BUY_SEED, ActionToken.ITEM_WHEAT):
+            grammar.push(token)
+        self.assertNotIn(ActionToken.QTY_0, grammar.valid_tokens())
+        self.assertNotIn(ActionToken.END_QUANTITY, grammar.valid_tokens())
+        grammar.push(ActionToken.QTY_1)
+        self.assertEqual(set(grammar.valid_tokens()),
+                         {ActionToken.QTY_0, ActionToken.END_QUANTITY})
+        grammar.push(ActionToken.QTY_0)
+        self.assertEqual(grammar.valid_tokens(), (ActionToken.END_QUANTITY,))
+        action = {"farmer": ["PASS"], "hands": [],
+                  "market": [["BUY_SEED", "WHEAT", 3], ["BUY_SEED", "WHEAT", 7]]}
+        ids = encode_action_tokens(action, observation)
+        self.assertEqual(decode_action_tokens(ids, observation), action)
+        action["market"][1][2] = 8
+        with self.assertRaises(ValueError):
+            encode_action_tokens(action, observation)
+
+    def test_three_is_representable(self) -> None:
         observation = make_observation()
         observation["private"]["shed"]["WHEAT"] = 7
         action = {
@@ -157,8 +191,8 @@ class ActionEncodingTests(unittest.TestCase):
             "market": [["SELL", "WHEAT", 3]],
         }
 
-        with self.assertRaisesRegex(ValueError, "temsil edilemiyor"):
-            encode_action_tokens(action, observation)
+        token_ids = encode_action_tokens(action, observation)
+        self.assertEqual(decode_action_tokens(token_ids, observation), action)
 
 
 if __name__ == "__main__":

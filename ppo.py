@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 from typing import Sequence
 
@@ -39,6 +39,7 @@ def validate_terminal_actor_safety(config: "PPOConfig") -> None:
 
 @dataclass(frozen=True, slots=True)
 class PPOConfig:
+    realized_value_coef: float = 0.0
     gamma: float = 0.999
     # lambda=1.0 terminal-ağırlıklı hedefte bir episode'un tüm adımlarına
     # neredeyse aynı avantajı verir. 0.95 adım-başı ayrımı korur.
@@ -57,7 +58,7 @@ class PPOConfig:
         1.0,
     )
     max_grad_norm: float = 1.00
-    target_kl: float = 0.015
+    target_kl: float = 0.020
     # Tek bir aykırı örnek minibatch KL'ini hedefin üstüne itebilir. O
     # minibatch atlanır; update ancak epoch ORTALAMASI hedefi aşarsa durur.
     kl_skip_multiplier: float = 2.0
@@ -90,6 +91,8 @@ class PPOConfig:
     )
 
     def __post_init__(self) -> None:
+        if not math.isfinite(self.realized_value_coef) or self.realized_value_coef < 0:
+            raise ValueError("realized_value_coef sonlu ve negatif olmayan değer olmalı.")
         if not 0.0 < self.gamma <= 1.0:
             raise ValueError("gamma (0, 1] aralığında olmalı.")
         if not 0.0 <= self.gae_lambda <= 1.0:
@@ -187,6 +190,7 @@ class PPOLoss:
     market_operation_kl: torch.Tensor
     item_kl: torch.Tensor
     quantity_kl: torch.Tensor
+    realized_value: torch.Tensor | None = None
 
 
 def compute_gae(
@@ -1034,6 +1038,9 @@ def actor_critic_ppo_loss(
     model: KaggricultureActorCritic,
     batch: PPOTrainingBatch,
     config: PPOConfig | None = None,
+    *,
+    realized_returns: torch.Tensor | None = None,
+    potential_offsets: torch.Tensor | None = None,
 ) -> PPOLoss:
     config = config or PPOConfig()
     output = model(
@@ -1075,7 +1082,7 @@ def actor_critic_ppo_loss(
         batch.credit_span_ends,
         batch.credit_span_mask,
     )
-    return ppo_loss(
+    loss = ppo_loss(
         new_action_log_probs=statistics.action_log_probs,
         old_action_log_probs=batch.old_action_log_probs,
         new_values=output.value,
@@ -1101,6 +1108,18 @@ def actor_critic_ppo_loss(
         head_type_ids=batch.head_type_ids,
         decision_mask=batch.decision_mask,
     )
+    if config.realized_value_coef > 0:
+        if realized_returns is None or potential_offsets is None:
+            raise ValueError("Gerçekleşmiş getiri eğitimi için tamamlanmış episode hedefleri gerekli.")
+        if realized_returns.shape != output.value.shape or potential_offsets.shape != output.value.shape:
+            raise ValueError("Gerçekleşmiş getiri hedef boyutu value ile eşleşmeli.")
+        # V_shaped(s) + beta*Phi(s) = V_realized(s). Gelecek sadece
+        # etiket olarak kullanılır; observation/policy girdisine verilmez.
+        prediction = output.value + potential_offsets.detach()
+        auxiliary = 0.5 * (prediction - realized_returns.detach()).square().mean()
+        loss = replace(loss, total=loss.total + config.realized_value_coef * auxiliary,
+                       realized_value=auxiliary)
+    return loss
 
 
 def optimizer_step(
@@ -1109,7 +1128,7 @@ def optimizer_step(
     loss: PPOLoss,
     config: PPOConfig | None = None,
 ) -> float:
-    """Tek PPO minibatch gradient adımı; gradient norm'unu döndürür."""
+    """Gradient'i max_grad_norm'a kırpar; KIRPMA ÖNCESİ normu döndürür."""
     config = config or PPOConfig()
     optimizer.zero_grad(set_to_none=True)
     loss.total.backward()

@@ -172,7 +172,7 @@ class PPOTests(unittest.TestCase):
         self.assertEqual(batch.unit_mask.shape, (2, 3))
         self.assertEqual(batch.unit_mask.sum(dim=1).tolist(), [1, 3])
         self.assertEqual(batch.input_token_ids.shape[0], 2)
-        self.assertEqual(batch.valid_token_masks.shape[-1], 49)
+        self.assertEqual(batch.valid_token_masks.shape[-1], 55)
 
     def test_ppo_loss_is_finite_and_updates_all_branches(self) -> None:
         torch.manual_seed(19)

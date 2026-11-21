@@ -76,11 +76,17 @@ class ActionToken(StrEnum):
     ITEM_COW = "ITEM:COW"
     ITEM_SHEEP = "ITEM:SHEEP"
 
+    QTY_0 = "QTY:0"
     QTY_1 = "QTY:1"
     QTY_2 = "QTY:2"
+    QTY_3 = "QTY:3"
+    QTY_4 = "QTY:4"
     QTY_5 = "QTY:5"
-    QTY_10 = "QTY:10"
-    QTY_ALL = "QTY:ALL"
+    QTY_6 = "QTY:6"
+    QTY_7 = "QTY:7"
+    QTY_8 = "QTY:8"
+    QTY_9 = "QTY:9"
+    END_QUANTITY = "<END_QUANTITY>"
 
 
 ACTION_TOKENS = tuple(ActionToken)
@@ -148,15 +154,8 @@ ITEM_TO_TOKEN = {
 }
 TOKEN_TO_ITEM = {token: item for item, token in ITEM_TO_TOKEN.items()}
 
-FIXED_QUANTITY_TO_TOKEN = {
-    1: ActionToken.QTY_1,
-    2: ActionToken.QTY_2,
-    5: ActionToken.QTY_5,
-    10: ActionToken.QTY_10,
-}
-TOKEN_TO_FIXED_QUANTITY = {
-    token: quantity for quantity, token in FIXED_QUANTITY_TO_TOKEN.items()
-}
+DIGIT_TO_TOKEN = {digit: ActionToken(f"QTY:{digit}") for digit in range(10)}
+TOKEN_TO_DIGIT = {token: digit for digit, token in DIGIT_TO_TOKEN.items()}
 
 UNIT_OPERATION_TOKENS = tuple(UNIT_OP_TO_TOKEN.values())
 # STOP bir delimiter olsa da MARKET_OP_OR_STOP aşamasında gerçek bir policy
@@ -167,8 +166,8 @@ MARKET_OPERATION_TOKENS = (
 )
 ITEM_TOKENS = tuple(ITEM_TO_TOKEN.values())
 QUANTITY_TOKENS = (
-    *FIXED_QUANTITY_TO_TOKEN.values(),
-    ActionToken.QTY_ALL,
+    *DIGIT_TO_TOKEN.values(),
+    ActionToken.END_QUANTITY,
 )
 STRUCTURAL_TOKENS = (
     ActionToken.BOS,
@@ -241,6 +240,8 @@ class ActionGrammarConfig:
     allowed_unit_ops: frozenset[str] | None = None
     allowed_market_ops: frozenset[str] | None = None
     allowed_items: frozenset[str] | None = None
+    # Per market operation. None = use allowed_items. Missing op → no items.
+    allowed_market_items: Mapping[str, frozenset[str]] | None = None
 
     def __post_init__(self) -> None:
         if self.allowed_unit_ops is not None:
@@ -258,6 +259,18 @@ class ActionGrammarConfig:
             if unknown:
                 names = ", ".join(sorted(unknown))
                 raise ValueError(f"Bilinmeyen item: {names}")
+        if self.allowed_market_items is not None:
+            normalized: dict[str, frozenset[str]] = {}
+            for op, items in self.allowed_market_items.items():
+                if op not in MARKET_ITEM_QUANTITY_OPS:
+                    raise ValueError(f"Bilinmeyen market operasyonu: {op}")
+                frozen = frozenset(items)
+                unknown = frozen - set(ITEM_TO_TOKEN)
+                if unknown:
+                    names = ", ".join(sorted(unknown))
+                    raise ValueError(f"Bilinmeyen item: {names}")
+                normalized[op] = frozen
+            object.__setattr__(self, "allowed_market_items", normalized)
 
 
 class _Phase(Enum):
@@ -328,7 +341,12 @@ class ActionGrammar:
             return True
         return op in allowed
 
-    def _allows_item(self, item: str) -> bool:
+    def _allows_item(self, item: str, op: str | None = None) -> bool:
+        op = self.current_op if op is None else op
+        per_op = self.config.allowed_market_items
+        if per_op is not None and op in MARKET_ITEM_QUANTITY_OPS:
+            allowed = per_op.get(op)
+            return allowed is not None and item in allowed
         allowed = self.config.allowed_items
         if allowed is None:
             return True
@@ -462,8 +480,8 @@ class ActionGrammar:
             )
             return
         if self.phase is _Phase.UNIT_QUANTITY:
-            self.current_quantity = self._resolve_quantity(token)
-            self.phase = _Phase.UNIT_END
+            if self._consume_quantity_token(token):
+                self.phase = _Phase.UNIT_END
             return
         if self.phase is _Phase.UNIT_END:
             action = self._finish_current_action()
@@ -489,8 +507,8 @@ class ActionGrammar:
             self.phase = _Phase.MARKET_QUANTITY
             return
         if self.phase is _Phase.MARKET_QUANTITY:
-            self.current_quantity = self._resolve_quantity(token)
-            self.phase = _Phase.MARKET_END
+            if self._consume_quantity_token(token):
+                self.phase = _Phase.MARKET_END
             return
         if self.phase is _Phase.MARKET_END:
             order = self._finish_current_action()
@@ -656,25 +674,25 @@ class ActionGrammar:
     def _valid_market_operations(self) -> tuple[str, ...]:
         operations: list[str] = []
         if any(
-            self._allows_item(item)
+            self._allows_item(item, "SELL")
             and self._market_quantity_limit("SELL", item) > 0
             for item in game.PRODUCTS
         ):
             operations.append("SELL")
         if any(
-            self._allows_item(crop)
+            self._allows_item(crop, "BUY_SEED")
             and self._market_quantity_limit("BUY_SEED", crop) > 0
             for crop in game.CROPS
         ):
             operations.append("BUY_SEED")
         if any(
-            self._allows_item(item)
+            self._allows_item(item, "BUY_PRODUCT")
             and self._market_quantity_limit("BUY_PRODUCT", item) > 0
             for item in ("WHEAT", "FERTILIZER")
         ):
             operations.append("BUY_PRODUCT")
         if any(
-            self._allows_item(animal)
+            self._allows_item(animal, "BUY_ANIMAL")
             and self._market_quantity_limit("BUY_ANIMAL", animal) > 0
             for animal in game.ANIMALS
         ):
@@ -775,29 +793,21 @@ class ActionGrammar:
             return count
         return 0
 
-    @staticmethod
-    def _valid_quantity_tokens(limit: int) -> tuple[ActionToken, ...]:
+    def _valid_quantity_tokens(self, limit: int) -> tuple[ActionToken, ...]:
         if limit <= 0:
             return ()
-        tokens = [
-            token
-            for quantity, token in FIXED_QUANTITY_TO_TOKEN.items()
-            if quantity <= limit
-        ]
-        # ALL yalnızca sabit miktar tokenlarından biriyle aynı aksiyonu
-        # üretmiyorsa açılır. Bu, PPO'da aynı aksiyonun iki temsilini önler.
-        if limit not in FIXED_QUANTITY_TO_TOKEN:
-            tokens.append(ActionToken.QTY_ALL)
+        prefix = self.current_quantity or 0
+        tokens = [token for digit, token in DIGIT_TO_TOKEN.items()
+                  if (prefix > 0 or digit > 0) and prefix * 10 + digit <= limit]
+        if prefix > 0:
+            tokens.append(ActionToken.END_QUANTITY)
         return tuple(tokens)
 
-    def _resolve_quantity(self, token: ActionToken) -> int:
-        if token is ActionToken.QTY_ALL:
-            quantity = self._current_quantity_limit()
-        else:
-            quantity = TOKEN_TO_FIXED_QUANTITY[token]
-        if quantity <= 0:
-            raise RuntimeError("Gramer sıfır miktar üretti.")
-        return quantity
+    def _consume_quantity_token(self, token: ActionToken) -> bool:
+        if token is ActionToken.END_QUANTITY:
+            return True
+        self.current_quantity = (self.current_quantity or 0) * 10 + TOKEN_TO_DIGIT[token]
+        return False
 
     def _finish_current_action(self) -> list[Any]:
         if self.current_op is None:
@@ -892,21 +902,18 @@ def decode_action_tokens(
     return grammar.to_action()
 
 
-def _quantity_token_for(
+def _push_quantity(
     grammar: ActionGrammar,
     quantity: int,
-) -> ActionToken:
+) -> None:
     if quantity <= 0:
         raise ValueError(f"Aksiyon miktarı pozitif olmalı; gelen: {quantity}")
     limit = grammar._current_quantity_limit()
-    if quantity in FIXED_QUANTITY_TO_TOKEN and quantity <= limit:
-        return FIXED_QUANTITY_TO_TOKEN[quantity]
-    if quantity == limit and ActionToken.QTY_ALL in grammar.valid_tokens():
-        return ActionToken.QTY_ALL
-    raise ValueError(
-        f"{quantity} miktarı bu sonlu vocabulary ile temsil edilemiyor. "
-        f"Sabit miktarlar={tuple(FIXED_QUANTITY_TO_TOKEN)}, mevcut ALL={limit}."
-    )
+    if quantity > limit:
+        raise ValueError(f"Miktar {quantity}, kullanılabilir sınır {limit} değerini aşıyor.")
+    for digit in str(quantity):
+        grammar.push(DIGIT_TO_TOKEN[int(digit)])
+    grammar.push(ActionToken.END_QUANTITY)
 
 
 def _push_raw_unit_action(grammar: ActionGrammar, raw_action: Sequence[Any]) -> None:
@@ -929,7 +936,7 @@ def _push_raw_unit_action(grammar: ActionGrammar, raw_action: Sequence[Any]) -> 
 
     if op in {"PICKUP", "PLACE"}:
         quantity = int(raw_action[2]) if len(raw_action) >= 3 else 1
-        grammar.push(_quantity_token_for(grammar, quantity))
+        _push_quantity(grammar, quantity)
 
     grammar.push(ActionToken.END_ACTION)
 
@@ -951,7 +958,7 @@ def _push_raw_market_order(grammar: ActionGrammar, raw_order: Sequence[Any]) -> 
             grammar.push(ITEM_TO_TOKEN[item])
         except KeyError:
             raise ValueError(f"Bilinmeyen item: {item!r}") from None
-        grammar.push(_quantity_token_for(grammar, int(raw_order[2])))
+        _push_quantity(grammar, int(raw_order[2]))
 
     grammar.push(ActionToken.END_ORDER)
 
@@ -964,8 +971,8 @@ def encode_action_tokens(
     """Geçerli bir Kaggle aksiyonunu canonical token id dizisine çevirir.
 
     Eksik hand aksiyonları ortam davranışıyla aynı olacak şekilde PASS olarak
-    tamamlanır. Vocabulary'deki 1/2/5/10 dışındaki miktarlar, yalnızca o anda
-    alınabilecek/satılabilecek miktarın tamamıysa QTY_ALL ile temsil edilir.
+    tamamlanır. Miktarlar başında sıfır olmayan ondalık rakamlar ve
+    END_QUANTITY ile temsil edilir; kaynak sınırındaki her tam sayı geçerlidir.
     """
     grammar = ActionGrammar(observation, config)
     grammar.push(ActionToken.BOS)
